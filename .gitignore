@@ -1,0 +1,30 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Swift Package Manager / Xcode
+.build/
+.swiftpm/
+/apps/macos/build/
+*.xcodeproj/
+xcuserdata/
+DerivedData/
+
+# Node
+node_modules/
+npm-debug.log*
+*.tsbuildinfo
+
+# Reporter temp files
+*.tmp
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Environment
+.env
+.env.*

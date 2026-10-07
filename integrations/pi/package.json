@@ -1,0 +1,15 @@
+{
+  "name": "pi-agent-companion",
+  "version": "0.1.0",
+  "description": "Reports pi session status to the Agent Companion macOS edge panel.",
+  "private": true,
+  "type": "module",
+  "keywords": ["pi-package"],
+  "license": "MIT",
+  "pi": {
+    "extensions": ["./extensions/agent-companion.ts"]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  }
+}

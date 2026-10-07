@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-companion.local/session-status.v1.json",
+  "title": "Agent Companion session status (v1)",
+  "description": "One file per live agent session, written by an agent integration and read by the Agent Companion app. Agent-neutral: nothing here is specific to any one agent.",
+  "type": "object",
+  "required": ["schemaVersion", "agent", "session", "status", "updatedAt"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "agent": {
+      "type": "object",
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "type": "string", "description": "Stable lowercase identifier, e.g. \"pi\", \"claude\", \"codex\"." },
+        "name": { "type": "string", "description": "Human-readable agent name." }
+      }
+    },
+    "session": {
+      "type": "object",
+      "required": ["id", "cwd"],
+      "properties": {
+        "id": { "type": "string", "description": "Unique within the agent." },
+        "cwd": { "type": "string", "description": "Absolute working directory." },
+        "name": { "type": "string" },
+        "model": { "type": "string" }
+      }
+    },
+    "pid": {
+      "type": "integer",
+      "description": "PID of the long-lived agent process. The app drops the session once this process exits. Omit only if unknown; the app then falls back to an updatedAt staleness timeout."
+    },
+    "status": {
+      "enum": ["working", "needs_attention", "idle", "error"],
+      "description": "working: agent is busy. needs_attention: agent is blocked on the user. idle: finished, waiting for the next prompt. error: last run failed."
+    },
+    "task": { "type": "string", "description": "What the session is working on, usually the latest user prompt." },
+    "activity": { "type": "string", "description": "Short, live description of the current step." },
+    "attention": {
+      "type": ["object", "null"],
+      "required": ["kind", "message"],
+      "properties": {
+        "kind": { "enum": ["question", "permission", "input", "other"] },
+        "message": { "type": "string" }
+      }
+    },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  }
+}
