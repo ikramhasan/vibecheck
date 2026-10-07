@@ -1,3 +1,4 @@
+import CompanionCore
 import SwiftUI
 
 /// Optional per-agent branding. Agents not listed here still work and get the
@@ -20,6 +21,13 @@ struct AgentAppearance {
     ]
 
     static func forAgent(_ id: String) -> AgentAppearance { registry[id] ?? generic }
+
+    /// Agents listed in Settings even before they have reported a session.
+    static let knownAgents: [AgentSession.AgentInfo] = [
+        .init(id: "pi", name: "pi"),
+        .init(id: "claude", name: "Claude Code"),
+        .init(id: "codex", name: "Codex"),
+    ]
 }
 
 struct AgentGlyph: View {

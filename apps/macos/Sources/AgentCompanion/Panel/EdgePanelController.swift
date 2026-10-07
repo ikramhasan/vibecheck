@@ -75,11 +75,13 @@ final class EdgePanelController {
     /// Rows the window is currently sized for. Grows immediately, shrinks after animations settle.
     private var sizedForCount = 1
 
-    init(store: SessionStore) {
+    init(store: SessionStore, settings: AppSettings, onOpenSettings: @escaping () -> Void) {
         self.store = store
         panel = EdgePanel(contentRect: .zero)
 
-        let root = EdgePanelView(store: store, state: state, onQuit: { NSApp.terminate(nil) })
+        let root = EdgePanelView(store: store, state: state, onOpenSettings: onOpenSettings,
+                                 onQuit: { NSApp.terminate(nil) })
+            .environment(settings)
         let hosting = NSHostingView(rootView: root)
         hosting.sizingOptions = []
         panel.contentView = hosting

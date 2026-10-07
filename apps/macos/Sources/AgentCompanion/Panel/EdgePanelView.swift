@@ -29,6 +29,7 @@ struct EdgeTabShape: Shape {
 struct EdgePanelView: View {
     let store: SessionStore
     let state: PanelState
+    let onOpenSettings: () -> Void
     let onQuit: () -> Void
 
     private var expanded: Bool { state.mode == .expanded }
@@ -52,7 +53,7 @@ struct EdgePanelView: View {
     private func card(width: CGFloat, height: CGFloat) -> some View {
         ZStack(alignment: .trailing) {
             ExpandedContent(sessions: store.sessions, pendingIDs: state.pendingAttentionIDs,
-                            isExpanded: expanded, onQuit: onQuit)
+                            isExpanded: expanded, onOpenSettings: onOpenSettings, onQuit: onQuit)
                 .frame(width: PanelMetrics.expandedWidth,
                        height: PanelMetrics.expandedHeight(count: count))
                 .opacity(expanded ? 1 : 0)
@@ -87,7 +88,7 @@ private struct CollapsedContent: View {
         let visible = sessions.prefix(PanelMetrics.maxVisible)
         VStack(spacing: PanelMetrics.collapsedSlot - 20) {
             ForEach(visible) { session in
-                StatusIndicator(status: session.status, size: 16)
+                StatusIndicator(status: session.status, agentID: session.agent.id, size: 16)
                     .frame(height: 20)
                     .transition(.scale(scale: 0.3).combined(with: .opacity))
             }
@@ -107,24 +108,14 @@ private struct CollapsedContent: View {
 
 struct StatusIndicator: View {
     let status: AgentSession.Status
+    let agentID: String
     var size: CGFloat = 16
+    @Environment(AppSettings.self) private var settings
 
     var body: some View {
         switch status {
         case .working:
-            // Clock-driven so it never joins the expand/collapse spring transaction.
-            TimelineView(.animation) { context in
-                let t = context.date.timeIntervalSinceReferenceDate
-                ZStack {
-                    Circle().stroke(Color.white.opacity(0.18), lineWidth: 2)
-                    Circle()
-                        .trim(from: 0, to: 0.32)
-                        .stroke(Color(red: 0.32, green: 0.56, blue: 1.0),
-                                style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                        .rotationEffect(.degrees(t.truncatingRemainder(dividingBy: 1.1) / 1.1 * 360))
-                }
-            }
-            .frame(width: size, height: size)
+            LoaderView(style: settings.loader.style(for: agentID), size: size)
         case .needsAttention:
             TimelineView(.animation) { context in
                 let t = context.date.timeIntervalSinceReferenceDate
@@ -154,6 +145,7 @@ private struct ExpandedContent: View {
     let sessions: [AgentSession]
     let pendingIDs: Set<String>
     let isExpanded: Bool
+    let onOpenSettings: () -> Void
     let onQuit: () -> Void
 
     var body: some View {
@@ -168,6 +160,16 @@ private struct ExpandedContent: View {
                     .padding(.horizontal, 6).padding(.vertical, 1)
                     .background(Capsule().fill(Color.white.opacity(0.08)))
                 Spacer()
+                Button(action: onOpenSettings) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.45))
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Settings")
+                .accessibilityLabel("Settings")
                 Button(action: onQuit) {
                     Image(systemName: "power")
                         .font(.system(size: 11, weight: .semibold))
@@ -219,7 +221,7 @@ private struct SessionRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            StatusIndicator(status: session.status, size: 14)
+            StatusIndicator(status: session.status, agentID: session.agent.id, size: 14)
                 .padding(.top, 2)
 
             VStack(alignment: .leading, spacing: 4) {

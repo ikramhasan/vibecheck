@@ -5,6 +5,7 @@ import CompanionCore
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var store: SessionStore?
     private var controller: EdgePanelController?
+    private var settingsWindow: SettingsWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let args = CommandLine.arguments
@@ -15,11 +16,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Register further non-reporter sources here, e.g. a log-tailing source
         // for an agent that can't run an integration hook.
         let store = SessionStore(sources: [source])
-        let controller = EdgePanelController(store: store)
+        let settings = AppSettings()
+        let settingsWindow = SettingsWindowController(settings: settings, store: store)
+        let controller = EdgePanelController(store: store, settings: settings,
+                                             onOpenSettings: { settingsWindow.show() })
         self.store = store
         self.controller = controller
+        self.settingsWindow = settingsWindow
         controller.show()
         store.start()
+        if args.contains("--settings") { settingsWindow.show() }
     }
 
     func applicationWillTerminate(_ notification: Notification) {

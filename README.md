@@ -15,9 +15,25 @@ to add another agent.
 ## Build & run
 
 ```bash
-apps/macos/scripts/bundle.sh
-open apps/macos/build/AgentCompanion.app          # live data
-open apps/macos/build/AgentCompanion.app --args --demo   # sample sessions
+apps/macos/scripts/bundle.sh                       # build the .app
+open apps/macos/build/AgentCompanion.app           # live data
+```
+
+Launch options:
+
+```bash
+open apps/macos/build/AgentCompanion.app --args --demo              # sample sessions
+open apps/macos/build/AgentCompanion.app --args --demo --settings   # also open Settings
+```
+
+Without `--demo` the panel stays hidden until an agent reports a session (see pi below).
+Hover the tab on the right screen edge to expand it; the gear opens Settings and the
+power button quits.
+
+If an older build is still running, quit it first so the new one loads:
+
+```bash
+pkill -x AgentCompanion
 ```
 
 ## pi
