@@ -6,7 +6,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var store: SessionStore?
     private var usage: UsageStore?
     private var controller: EdgePanelController?
-    private var settingsWindow: SettingsWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let args = CommandLine.arguments
@@ -19,13 +18,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let store = SessionStore(sources: [source])
         let usage = UsageStore(fetcher: args.contains("--demo") ? DemoUsage() : CodexBarCLI.locate())
         let settings = AppSettings()
-        let settingsWindow = SettingsWindowController(settings: settings, store: store, usage: usage)
-        let controller = EdgePanelController(store: store, usage: usage, settings: settings,
-                                             onOpenSettings: { settingsWindow.show() })
+        let controller = EdgePanelController(store: store, usage: usage, settings: settings)
         self.store = store
         self.usage = usage
         self.controller = controller
-        self.settingsWindow = settingsWindow
 
         observeAgentPreferences(settings) { prefs in
             store.setHiddenAgents(prefs.hiddenStatus)
@@ -34,7 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.show()
         store.start()
         usage.start()
-        if args.contains("--settings") { settingsWindow.show() }
+        if args.contains("--settings") { controller.showPage(.settings) }
     }
 
     /// Calls `apply` now and after every change to `settings.agents`.

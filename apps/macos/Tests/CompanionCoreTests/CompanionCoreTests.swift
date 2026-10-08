@@ -162,6 +162,37 @@ private func session(_ id: String, _ status: AgentSession.Status, message: Strin
     }
 }
 
+@Suite struct PinnedPresentationTests {
+    @Test func pinnedStaysExpandedWhenPointerLeaves() {
+        var p = PanelPresentation()
+        p.update(sessions: [session("a", .working)])
+        p.setHovering(true)
+        p.setPinned(true)
+        p.setHovering(false)
+        #expect(p.mode == .expanded)
+        p.setPinned(false)
+        #expect(p.mode == .collapsed)
+    }
+
+    @Test func pinnedShowsPanelWithNothingToShow() {
+        var p = PanelPresentation()
+        p.update(sessions: [])
+        p.setPinned(true)
+        #expect(p.mode == .expanded)
+        p.setPinned(false)
+        #expect(p.mode == .hidden)
+    }
+
+    @Test func unpinWhileHoveringStaysExpanded() {
+        var p = PanelPresentation()
+        p.update(sessions: [session("a", .working)])
+        p.setPinned(true)
+        p.setHovering(true)
+        p.setPinned(false)
+        #expect(p.mode == .expanded)
+    }
+}
+
 @MainActor
 @Suite struct SessionFilterTests {
     @Test func hiddenAgentsAreFilteredButStillSeen() {

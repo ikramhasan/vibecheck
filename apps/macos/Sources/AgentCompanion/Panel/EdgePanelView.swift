@@ -31,16 +31,18 @@ struct EdgePanelView: View {
     let usage: UsageStore
     let state: PanelState
     let onOpenSettings: () -> Void
+    let onCloseSettings: () -> Void
     let onQuit: () -> Void
+    @Environment(AppSettings.self) private var settings
 
     private var expanded: Bool { state.mode == .expanded }
     private var hidden: Bool { state.mode == .hidden }
     private var count: Int { store.sessions.count }
+    private var onSettings: Bool { state.page == .settings }
 
     var body: some View {
         let width = expanded ? PanelMetrics.expandedWidth : PanelMetrics.collapsedWidth
-        let height = expanded ? PanelMetrics.expandedHeight(count: count, usage: usage.usage)
-                              : PanelMetrics.collapsedHeight(count: count)
+        let height = expanded ? pageHeight : PanelMetrics.collapsedHeight(count: count)
 
         ZStack(alignment: .trailing) {
             Color.clear
@@ -53,14 +55,29 @@ struct EdgePanelView: View {
 
     private func card(width: CGFloat, height: CGFloat) -> some View {
         ZStack(alignment: .trailing) {
-            ExpandedContent(sessions: store.sessions, usage: usage.usage,
-                            pendingIDs: state.pendingAttentionIDs,
-                            isExpanded: expanded, onOpenSettings: onOpenSettings, onQuit: onQuit)
-                .frame(width: PanelMetrics.expandedWidth,
-                       height: PanelMetrics.expandedHeight(count: count, usage: usage.usage))
-                .opacity(expanded ? 1 : 0)
-                .blur(radius: expanded ? 0 : 6)
-                .scaleEffect(expanded ? 1 : 0.96, anchor: .trailing)
+            // Both pages stay mounted so their items can cascade past each other.
+            ZStack(alignment: .top) {
+                ExpandedContent(sessions: store.sessions, usage: usage.usage,
+                                pendingIDs: state.pendingAttentionIDs,
+                                isShown: expanded && !onSettings,
+                                hiddenSide: onSettings ? .leading : .trailing,
+                                paced: state.pageChanging,
+                                onOpenSettings: onOpenSettings, onQuit: onQuit)
+                    .frame(height: PanelMetrics.expandedHeight(count: count, usage: usage.usage), alignment: .top)
+                    .allowsHitTesting(!onSettings)
+                    .accessibilityHidden(onSettings)
+
+                SettingsPage(settings: settings, store: store, usage: usage,
+                             isShown: expanded && onSettings, paced: state.pageChanging,
+                             onBack: onCloseSettings)
+                    .frame(height: PanelMetrics.settingsHeight)
+                    .allowsHitTesting(onSettings)
+                    .accessibilityHidden(!onSettings)
+            }
+            .frame(width: PanelMetrics.expandedWidth, height: pageHeight, alignment: .top)
+            .opacity(expanded ? 1 : 0)
+            .blur(radius: expanded ? 0 : 6)
+            .scaleEffect(expanded ? 1 : 0.96, anchor: .trailing)
 
             CollapsedContent(sessions: store.sessions)
                 .frame(width: PanelMetrics.collapsedWidth)
@@ -78,6 +95,10 @@ struct EdgePanelView: View {
         .overlay {
             EdgeTabShape().stroke(Color.white.opacity(0.08), lineWidth: 1)
         }
+    }
+
+    private var pageHeight: CGFloat {
+        onSettings ? PanelMetrics.settingsHeight : PanelMetrics.expandedHeight(count: count, usage: usage.usage)
     }
 }
 
@@ -154,7 +175,11 @@ private struct ExpandedContent: View {
     let sessions: [AgentSession]
     let usage: [ProviderUsage]
     let pendingIDs: Set<String>
-    let isExpanded: Bool
+    /// On screen: panel expanded and the sessions page selected.
+    let isShown: Bool
+    /// Where items rest while hidden: leading behind Settings, trailing when collapsed.
+    let hiddenSide: HorizontalEdge
+    let paced: Bool
     let onOpenSettings: () -> Void
     let onQuit: () -> Void
 
@@ -193,6 +218,7 @@ private struct ExpandedContent: View {
             }
             .frame(height: PanelMetrics.headerHeight)
             .padding(.horizontal, 16)
+            .cascade(shown: isShown || hiddenSide == .trailing, index: 0, side: hiddenSide, paced: paced)
 
             if sessions.count > PanelMetrics.maxVisible {
                 ScrollView(.vertical) { rows }
@@ -204,9 +230,8 @@ private struct ExpandedContent: View {
             if !usage.isEmpty {
                 UsageSection(usage: usage)
                     .frame(height: PanelMetrics.usageHeight(usage), alignment: .top)
-                    .opacity(isExpanded ? 1 : 0)
-                    .animation(isExpanded ? .easeOut(duration: 0.25).delay(0.12) : .easeOut(duration: 0.1),
-                               value: isExpanded)
+                    .modifier(UsageReveal(shown: isShown, index: min(sessions.count, 6) + 1,
+                                          side: hiddenSide, paced: paced))
             }
             Spacer(minLength: 0)
         }
@@ -225,15 +250,28 @@ private struct ExpandedContent: View {
             ForEach(Array(sessions.enumerated()), id: \.element.id) { index, session in
                 SessionRow(session: session, highlighted: pendingIDs.contains(session.id))
                     .frame(height: PanelMetrics.rowHeight)
-                    // Small stagger so rows settle in after the card lands.
-                    .offset(x: isExpanded ? 0 : 24)
-                    .opacity(isExpanded ? 1 : 0)
-                    .animation(
-                        isExpanded
-                            ? .spring(response: 0.5, dampingFraction: 0.7).delay(0.04 + Double(min(index, 6)) * 0.04)
-                            : .easeOut(duration: 0.12),
-                        value: isExpanded)
+                    // Small stagger so rows settle in after the card lands, and leave
+                    // one by one when Settings takes over.
+                    .cascade(shown: isShown, index: index + 1, side: hiddenSide, paced: paced)
             }
+        }
+    }
+}
+
+/// Usage fades in on expand (as before), but cascades like a row on a page change.
+private struct UsageReveal: ViewModifier {
+    let shown: Bool
+    let index: Int
+    let side: HorizontalEdge
+    let paced: Bool
+
+    func body(content: Content) -> some View {
+        if paced {
+            content.cascade(shown: shown, index: index, side: side)
+        } else {
+            content
+                .opacity(shown ? 1 : 0)
+                .animation(shown ? .easeOut(duration: 0.25).delay(0.12) : .easeOut(duration: 0.1), value: shown)
         }
     }
 }

@@ -9,6 +9,8 @@ import Foundation
 /// - A session newly needs attention → expanded on its own and stays open until
 ///   the user has seen it (hovered in, then out) or the request is resolved.
 ///   A *new* request re-opens it even if an earlier one was dismissed.
+/// - Pinned (Settings is open in the panel) → expanded regardless of hover or
+///   content, so popovers and menus outside the card don't collapse it.
 public struct PanelPresentation: Equatable, Sendable {
     public enum Mode: Equatable, Sendable { case hidden, collapsed, expanded }
 
@@ -19,6 +21,7 @@ public struct PanelPresentation: Equatable, Sendable {
     private var hovering = false
     /// Usage stats are enabled, so the tab stays reachable with no sessions running.
     private var hasPersistentContent = false
+    private var pinned = false
 
     public init() {}
 
@@ -49,8 +52,16 @@ public struct PanelPresentation: Equatable, Sendable {
         recompute()
     }
 
+    public mutating func setPinned(_ value: Bool) {
+        guard value != pinned else { return }
+        pinned = value
+        recompute()
+    }
+
     private mutating func recompute() {
-        if sessionCount == 0 && !hasPersistentContent {
+        if pinned {
+            mode = .expanded
+        } else if sessionCount == 0 && !hasPersistentContent {
             mode = .hidden
             hovering = false
         } else if hovering || !pendingAttention.isEmpty {

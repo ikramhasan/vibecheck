@@ -48,6 +48,9 @@ enum PanelMetrics {
             + usageHeight(usage) + 12
     }
 
+    /// The Settings page has a fixed height; its content scrolls.
+    static let settingsHeight: CGFloat = 560
+
     /// Room on the left/top/bottom of the card for its shadow to render.
     static let shadowPadding: CGFloat = 40
 }
@@ -56,6 +59,10 @@ enum PanelMetrics {
 @Observable
 final class PanelState {
     var mode: PanelPresentation.Mode = .hidden
+    var page: PanelPage = .sessions
+    /// True while a page change is animating, so items use the cascade timing
+    /// instead of the expand/collapse timing.
+    var pageChanging = false
     /// Session ids whose attention request hasn't been seen yet (highlighted rows).
     var pendingAttentionIDs: Set<String> = []
 }
@@ -92,6 +99,7 @@ final class EdgePanelController {
     private var hoverTimer: Timer?
     private var shrinkWork: DispatchWorkItem?
     private var hideWork: DispatchWorkItem?
+    private var pageSettleWork: DispatchWorkItem?
 
     /// Time the pointer has to stay away before collapsing — avoids flicker at the boundary.
     private let collapseDelay: TimeInterval = 0.28
@@ -99,12 +107,14 @@ final class EdgePanelController {
     /// Height the window is currently sized for. Grows immediately, shrinks after animations settle.
     private var sizedForHeight: CGFloat = 0
 
-    init(store: SessionStore, usage: UsageStore, settings: AppSettings, onOpenSettings: @escaping () -> Void) {
+    init(store: SessionStore, usage: UsageStore, settings: AppSettings) {
         self.store = store
         self.usage = usage
         panel = EdgePanel(contentRect: .zero)
 
-        let root = EdgePanelView(store: store, usage: usage, state: state, onOpenSettings: onOpenSettings,
+        let root = EdgePanelView(store: store, usage: usage, state: state,
+                                 onOpenSettings: { [weak self] in self?.showPage(.settings) },
+                                 onCloseSettings: { [weak self] in self?.showPage(.sessions) },
                                  onQuit: { NSApp.terminate(nil) })
             .environment(settings)
         let hosting = NSHostingView(rootView: root)
@@ -117,6 +127,19 @@ final class EdgePanelController {
             self.contentChanged()
             self.presentation.setPersistentContent(!self.usage.usage.isEmpty)
             self.apply(attentionArrived: false)
+        }
+
+        // Clicking into another app leaves Settings. Our own popovers and menus take key
+        // too, so only go back when focus left the app entirely.
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didResignKeyNotification, object: panel, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                DispatchQueue.main.async {
+                    guard let self, NSApp.keyWindow == nil, !self.panel.isKeyWindow else { return }
+                    self.showPage(.sessions)
+                }
+            }
         }
 
         NotificationCenter.default.addObserver(
@@ -132,6 +155,35 @@ final class EdgePanelController {
         panel.ignoresMouseEvents = true
         startHoverTracking()
         sessionsChanged(store.sessions)
+    }
+
+    // MARK: - Pages
+
+    /// Swap the expanded panel's page. Settings pins the panel open so its popovers
+    /// and menus (which sit outside the card) don't make it collapse.
+    func showPage(_ page: PanelPage) {
+        guard page != state.page else { return }
+        pageSettleWork?.cancel()
+        state.pageChanging = true
+
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        withAnimation(reduceMotion ? .easeOut(duration: 0.18) : .spring(response: 0.5, dampingFraction: 0.82)) {
+            state.page = page
+        }
+        contentChanged() // window grows now / shrinks after the cascade, per the new page
+        presentation.setPinned(page == .settings)
+        apply(attentionArrived: false)
+
+        if page == .settings {
+            panel.makeKey()
+            usage.refreshIfStale()
+        } else if panel.isKeyWindow {
+            panel.resignKey()
+        }
+
+        let work = DispatchWorkItem { [weak self] in self?.state.pageChanging = false }
+        pageSettleWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
     }
 
     // MARK: - Sessions
@@ -163,7 +215,9 @@ final class EdgePanelController {
     }
 
     private var targetHeight: CGFloat {
-        PanelMetrics.expandedHeight(count: store.sessions.count, usage: usage.usage)
+        state.page == .settings
+            ? PanelMetrics.settingsHeight
+            : PanelMetrics.expandedHeight(count: store.sessions.count, usage: usage.usage)
     }
 
     // MARK: - Layout
@@ -187,8 +241,7 @@ final class EdgePanelController {
     private func cardRect(expanded: Bool) -> NSRect {
         let count = store.sessions.count
         let w = expanded ? PanelMetrics.expandedWidth : PanelMetrics.collapsedWidth
-        let h = expanded ? PanelMetrics.expandedHeight(count: count, usage: usage.usage)
-                         : PanelMetrics.collapsedHeight(count: count)
+        let h = expanded ? targetHeight : PanelMetrics.collapsedHeight(count: count)
         let f = panel.frame
         return NSRect(x: f.maxX - w, y: f.midY - h / 2, width: w, height: h)
     }
@@ -250,6 +303,9 @@ final class EdgePanelController {
             return
         }
         let previous = state.mode
+        // Expand/collapse uses its own timing, not the page-change cascade.
+        pageSettleWork?.cancel()
+        state.pageChanging = false
 
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         let animation: Animation
