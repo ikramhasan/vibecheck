@@ -28,6 +28,7 @@ struct EdgeTabShape: Shape {
 
 struct EdgePanelView: View {
     let store: SessionStore
+    let usage: UsageStore
     let state: PanelState
     let onOpenSettings: () -> Void
     let onQuit: () -> Void
@@ -38,7 +39,7 @@ struct EdgePanelView: View {
 
     var body: some View {
         let width = expanded ? PanelMetrics.expandedWidth : PanelMetrics.collapsedWidth
-        let height = expanded ? PanelMetrics.expandedHeight(count: count)
+        let height = expanded ? PanelMetrics.expandedHeight(count: count, usage: usage.usage)
                               : PanelMetrics.collapsedHeight(count: count)
 
         ZStack(alignment: .trailing) {
@@ -52,10 +53,11 @@ struct EdgePanelView: View {
 
     private func card(width: CGFloat, height: CGFloat) -> some View {
         ZStack(alignment: .trailing) {
-            ExpandedContent(sessions: store.sessions, pendingIDs: state.pendingAttentionIDs,
+            ExpandedContent(sessions: store.sessions, usage: usage.usage,
+                            pendingIDs: state.pendingAttentionIDs,
                             isExpanded: expanded, onOpenSettings: onOpenSettings, onQuit: onQuit)
                 .frame(width: PanelMetrics.expandedWidth,
-                       height: PanelMetrics.expandedHeight(count: count))
+                       height: PanelMetrics.expandedHeight(count: count, usage: usage.usage))
                 .opacity(expanded ? 1 : 0)
                 .blur(radius: expanded ? 0 : 6)
                 .scaleEffect(expanded ? 1 : 0.96, anchor: .trailing)
@@ -92,6 +94,13 @@ private struct CollapsedContent: View {
                     .frame(height: 20)
                     .transition(.scale(scale: 0.3).combined(with: .opacity))
             }
+            if sessions.isEmpty {
+                // Only usage to show: a quiet gauge so the tab still reads as something.
+                Image(systemName: "gauge.with.dots.needle.50percent")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .frame(height: 20)
+            }
             if sessions.count > visible.count {
                 Text("+\(sessions.count - visible.count)")
                     .font(.system(size: 10, weight: .semibold).monospacedDigit())
@@ -102,7 +111,7 @@ private struct CollapsedContent: View {
         .padding(.leading, 4) // optically center between left edge and screen edge
         .animation(.spring(response: 0.4, dampingFraction: 0.7), value: sessions.map(\.id))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(sessions.count) agent sessions")
+        .accessibilityLabel(sessions.isEmpty ? "Agent usage" : "\(sessions.count) agent sessions")
     }
 }
 
@@ -143,6 +152,7 @@ struct StatusIndicator: View {
 
 private struct ExpandedContent: View {
     let sessions: [AgentSession]
+    let usage: [ProviderUsage]
     let pendingIDs: Set<String>
     let isExpanded: Bool
     let onOpenSettings: () -> Void
@@ -187,8 +197,16 @@ private struct ExpandedContent: View {
             if sessions.count > PanelMetrics.maxVisible {
                 ScrollView(.vertical) { rows }
                     .scrollIndicators(.never)
-            } else {
+                    .frame(height: CGFloat(PanelMetrics.maxVisible) * PanelMetrics.rowHeight)
+            } else if !sessions.isEmpty || usage.isEmpty {
                 rows
+            }
+            if !usage.isEmpty {
+                UsageSection(usage: usage)
+                    .frame(height: PanelMetrics.usageHeight(usage), alignment: .top)
+                    .opacity(isExpanded ? 1 : 0)
+                    .animation(isExpanded ? .easeOut(duration: 0.25).delay(0.12) : .easeOut(duration: 0.1),
+                               value: isExpanded)
             }
             Spacer(minLength: 0)
         }
@@ -198,6 +216,12 @@ private struct ExpandedContent: View {
 
     private var rows: some View {
         VStack(spacing: 0) {
+            if sessions.isEmpty {
+                Text("No agents running")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.4))
+                    .frame(maxWidth: .infinity, minHeight: PanelMetrics.rowHeight)
+            }
             ForEach(Array(sessions.enumerated()), id: \.element.id) { index, session in
                 SessionRow(session: session, highlighted: pendingIDs.contains(session.id))
                     .frame(height: PanelMetrics.rowHeight)

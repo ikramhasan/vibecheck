@@ -8,11 +8,13 @@ import SwiftUI
 final class SettingsWindowController {
     private let settings: AppSettings
     private let store: SessionStore
+    private let usage: UsageStore
     private var window: NSWindow?
 
-    init(settings: AppSettings, store: SessionStore) {
+    init(settings: AppSettings, store: SessionStore, usage: UsageStore) {
         self.settings = settings
         self.store = store
+        self.usage = usage
     }
 
     func show() {
@@ -23,13 +25,13 @@ final class SettingsWindowController {
     }
 
     private func makeWindow() -> NSWindow {
-        let hosting = NSHostingController(rootView: SettingsView(settings: settings, store: store))
+        let hosting = NSHostingController(rootView: SettingsView(settings: settings, store: store, usage: usage))
         let window = NSWindow(contentViewController: hosting)
         window.title = "Agent Companion Settings"
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         window.isReleasedWhenClosed = false
         window.appearance = NSAppearance(named: .darkAqua)
-        window.setContentSize(NSSize(width: 560, height: 560))
+        window.setContentSize(NSSize(width: 560, height: 640))
         window.center()
         return window
     }

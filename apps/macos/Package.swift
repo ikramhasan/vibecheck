@@ -8,7 +8,8 @@ let package = Package(
         // Agent-neutral model, session sources and presentation policy. No UI.
         .target(name: "CompanionCore"),
         // The macOS app: edge panel window + SwiftUI views.
-        .executableTarget(name: "AgentCompanion", dependencies: ["CompanionCore"]),
+        .executableTarget(name: "AgentCompanion", dependencies: ["CompanionCore"],
+                          resources: [.copy("Resources/ProviderIcons")]),
         .testTarget(name: "CompanionCoreTests", dependencies: ["CompanionCore"]),
     ]
 )

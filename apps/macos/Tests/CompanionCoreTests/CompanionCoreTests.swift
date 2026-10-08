@@ -146,3 +146,33 @@ private func session(_ id: String, _ status: AgentSession.Status, message: Strin
         #expect(store.sessions.map(\.sessionID).sorted() == ["1", "2"])
     }
 }
+
+@Suite struct PersistentContentTests {
+    @Test func usageKeepsTabVisibleWithoutSessions() {
+        var p = PanelPresentation()
+        p.update(sessions: [])
+        #expect(p.mode == .hidden)
+        p.setPersistentContent(true)
+        #expect(p.mode == .collapsed)
+        p.setHovering(true)
+        #expect(p.mode == .expanded)
+        p.setHovering(false)
+        p.setPersistentContent(false)
+        #expect(p.mode == .hidden)
+    }
+}
+
+@MainActor
+@Suite struct SessionFilterTests {
+    @Test func hiddenAgentsAreFilteredButStillSeen() {
+        let a = AgentSession(agent: .init(id: "pi", name: "pi"), sessionID: "1", cwd: "/", status: .working)
+        let b = AgentSession(agent: .init(id: "codex", name: "Codex"), sessionID: "2", cwd: "/", status: .working)
+        let store = SessionStore(sources: [StaticSessionSource([a, b])])
+        store.setHiddenAgents(["codex"])
+        store.start()
+        #expect(store.sessions.map(\.agent.id) == ["pi"])
+        #expect(Set(store.seenAgents.map(\.id)) == ["pi", "codex"])
+        store.setHiddenAgents([])
+        #expect(store.sessions.count == 2)
+    }
+}

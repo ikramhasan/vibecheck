@@ -36,6 +36,19 @@ If an older build is still running, quit it first so the new one loads:
 pkill -x AgentCompanion
 ```
 
+## Usage stats (CodexBar)
+
+The app bundles the [CodexBar](https://github.com/steipete/CodexBar) CLI (pinned, checksum-verified
+by `apps/macos/scripts/fetch-codexbar.sh`) in `Contents/Helpers/`. It supplies the provider list in
+Settings and each agent's 5h/weekly limits, reset times and local cost estimate. CLI reference:
+`docs/codexbar/cli.md`. Agent icons and brand colours also come from CodexBar (MIT); refresh them with
+`apps/macos/scripts/sync-provider-icons.sh`.
+
+In Settings → Agents, add agents and toggle **Status** (running sessions) and **Usage** per agent.
+With any usage enabled the tab stays visible even when no agent is running. Usage refreshes every
+5 minutes and when the panel opens with stale data. During `swift run`, set
+`AGENT_COMPANION_CODEXBAR=/path/to/CodexBarCLI` or have `codexbar` installed via Homebrew.
+
 ## pi
 
 ```bash

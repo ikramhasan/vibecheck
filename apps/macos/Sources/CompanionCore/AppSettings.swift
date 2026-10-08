@@ -54,6 +54,61 @@ extension LoaderSettings: Codable {
     }
 }
 
+/// The agents the user has chosen to track, and what to show for each. Ids are CodexBar
+/// provider ids, which are also the agent ids session integrations report ("pi",
+/// "claude", "codex", …). Nothing is auto-detected: the user adds agents in Settings.
+public struct AgentPreferences: Equatable, Codable, Sendable {
+    /// Agents the user added, in the order they added them.
+    public private(set) var added: [String]
+    /// Opt-in per agent: each one costs a CodexBar fetch every refresh.
+    public private(set) var usage: Set<String>
+    /// Running status is shown unless hidden here, so an agent whose integration
+    /// reports sessions keeps working even if it was never added.
+    public private(set) var hiddenStatus: Set<String>
+
+    public init(added: [String] = [], usage: Set<String> = [], hiddenStatus: Set<String> = []) {
+        self.added = added
+        self.usage = usage
+        self.hiddenStatus = hiddenStatus
+    }
+
+    public func showsUsage(_ id: String) -> Bool { usage.contains(id) }
+    public func showsStatus(_ id: String) -> Bool { !hiddenStatus.contains(id) }
+
+    /// New agents start with usage on — that's usually why they're being added.
+    public mutating func add(_ id: String) {
+        guard !added.contains(id) else { return }
+        added.append(id)
+        usage.insert(id)
+    }
+
+    public mutating func remove(_ id: String) {
+        added.removeAll { $0 == id }
+        usage.remove(id)
+        hiddenStatus.remove(id)
+    }
+
+    public mutating func setUsage(_ on: Bool, for id: String) {
+        if on { usage.insert(id); if !added.contains(id) { added.append(id) } } else { usage.remove(id) }
+    }
+
+    public mutating func setStatus(_ on: Bool, for id: String) {
+        if on { hiddenStatus.remove(id) } else {
+            hiddenStatus.insert(id)
+            if !added.contains(id) { added.append(id) }
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey { case added, usage, hiddenStatus }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(added: (try? c.decode([String].self, forKey: .added)) ?? [],
+                  usage: (try? c.decode(Set<String>.self, forKey: .usage)) ?? [],
+                  hiddenStatus: (try? c.decode(Set<String>.self, forKey: .hiddenStatus)) ?? [])
+    }
+}
+
 /// User preferences, persisted to UserDefaults. Grows a property per setting group.
 @MainActor
 @Observable
@@ -62,15 +117,21 @@ public final class AppSettings {
         didSet { if loader != oldValue { save(loader, key: Keys.loader) } }
     }
 
+    public var agents: AgentPreferences {
+        didSet { if agents != oldValue { save(agents, key: Keys.agents) } }
+    }
+
     @ObservationIgnored private let defaults: UserDefaults
 
     private enum Keys {
         static let loader = "settings.loader"
+        static let agents = "settings.agents"
     }
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         loader = Self.load(LoaderSettings.self, key: Keys.loader, from: defaults) ?? LoaderSettings()
+        agents = Self.load(AgentPreferences.self, key: Keys.agents, from: defaults) ?? AgentPreferences()
     }
 
     private func save<T: Encodable>(_ value: T, key: String) {

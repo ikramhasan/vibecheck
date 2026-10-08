@@ -3,7 +3,7 @@ import Foundation
 /// Pure decision logic for how the edge panel presents itself. Kept free of
 /// AppKit/SwiftUI so it's unit-testable.
 ///
-/// - No sessions → hidden.
+/// - No sessions (and no usage to show) → hidden.
 /// - Sessions running → small collapsed tab.
 /// - Hovered → expanded.
 /// - A session newly needs attention → expanded on its own and stays open until
@@ -17,6 +17,8 @@ public struct PanelPresentation: Equatable, Sendable {
     private var attentionKeys: Set<String> = []
     private var sessionCount = 0
     private var hovering = false
+    /// Usage stats are enabled, so the tab stays reachable with no sessions running.
+    private var hasPersistentContent = false
 
     public init() {}
 
@@ -31,6 +33,12 @@ public struct PanelPresentation: Equatable, Sendable {
         recompute()
     }
 
+    public mutating func setPersistentContent(_ value: Bool) {
+        guard value != hasPersistentContent else { return }
+        hasPersistentContent = value
+        recompute()
+    }
+
     public mutating func setHovering(_ value: Bool) {
         guard value != hovering else { return }
         hovering = value
@@ -42,7 +50,7 @@ public struct PanelPresentation: Equatable, Sendable {
     }
 
     private mutating func recompute() {
-        if sessionCount == 0 {
+        if sessionCount == 0 && !hasPersistentContent {
             mode = .hidden
             hovering = false
         } else if hovering || !pendingAttention.isEmpty {

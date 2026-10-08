@@ -21,8 +21,31 @@ enum PanelMetrics {
     static let expandedWidth: CGFloat = 340
     static let headerHeight: CGFloat = 44
     static let rowHeight: CGFloat = 76
-    static func expandedHeight(count: Int) -> CGFloat {
-        flare * 2 + headerHeight + CGFloat(min(max(count, 1), maxVisible)) * rowHeight + 12
+
+    // Usage section
+    static let usageHeaderHeight: CGFloat = 30
+    static let usageProviderHeader: CGFloat = 22
+    static let usageLine: CGFloat = 20
+    static let usageProviderGap: CGFloat = 10
+    static let maxUsageHeight: CGFloat = 300
+
+    static func usageHeight(_ usage: [ProviderUsage]) -> CGFloat {
+        guard !usage.isEmpty else { return 0 }
+        let body = usage.reduce(CGFloat(0)) {
+            $0 + usageProviderHeader + CGFloat($1.lineCount) * usageLine + usageProviderGap
+        }
+        return usageHeaderHeight + min(body, maxUsageHeight)
+    }
+
+    /// Session rows shown; zero only when usage fills the panel on its own.
+    static func sessionSlots(count: Int, hasUsage: Bool) -> Int {
+        count == 0 && hasUsage ? 0 : min(max(count, 1), maxVisible)
+    }
+
+    static func expandedHeight(count: Int, usage: [ProviderUsage] = []) -> CGFloat {
+        flare * 2 + headerHeight
+            + CGFloat(sessionSlots(count: count, hasUsage: !usage.isEmpty)) * rowHeight
+            + usageHeight(usage) + 12
     }
 
     /// Room on the left/top/bottom of the card for its shadow to render.
@@ -62,6 +85,7 @@ final class EdgePanel: NSPanel {
 @MainActor
 final class EdgePanelController {
     private let store: SessionStore
+    private let usage: UsageStore
     private let state = PanelState()
     private let panel: EdgePanel
     private var presentation = PanelPresentation()
@@ -72,14 +96,15 @@ final class EdgePanelController {
     /// Time the pointer has to stay away before collapsing — avoids flicker at the boundary.
     private let collapseDelay: TimeInterval = 0.28
     private var leftAt: Date?
-    /// Rows the window is currently sized for. Grows immediately, shrinks after animations settle.
-    private var sizedForCount = 1
+    /// Height the window is currently sized for. Grows immediately, shrinks after animations settle.
+    private var sizedForHeight: CGFloat = 0
 
-    init(store: SessionStore, settings: AppSettings, onOpenSettings: @escaping () -> Void) {
+    init(store: SessionStore, usage: UsageStore, settings: AppSettings, onOpenSettings: @escaping () -> Void) {
         self.store = store
+        self.usage = usage
         panel = EdgePanel(contentRect: .zero)
 
-        let root = EdgePanelView(store: store, state: state, onOpenSettings: onOpenSettings,
+        let root = EdgePanelView(store: store, usage: usage, state: state, onOpenSettings: onOpenSettings,
                                  onQuit: { NSApp.terminate(nil) })
             .environment(settings)
         let hosting = NSHostingView(rootView: root)
@@ -87,6 +112,12 @@ final class EdgePanelController {
         panel.contentView = hosting
 
         store.onChange = { [weak self] sessions in self?.sessionsChanged(sessions) }
+        usage.onChange = { [weak self] _ in
+            guard let self else { return }
+            self.contentChanged()
+            self.presentation.setPersistentContent(!self.usage.usage.isEmpty)
+            self.apply(attentionArrived: false)
+        }
 
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
@@ -106,28 +137,33 @@ final class EdgePanelController {
     // MARK: - Sessions
 
     private func sessionsChanged(_ sessions: [AgentSession]) {
-        let count = sessions.count
-        if count > 0 {
-            shrinkWork?.cancel()
-            if count > sizedForCount {
-                sizedForCount = count
-                reposition()
-            } else if count < sizedForCount {
-                // Let the card animate down before shrinking the window around it.
-                let work = DispatchWorkItem { [weak self] in
-                    guard let self else { return }
-                    self.sizedForCount = max(self.store.sessions.count, 1)
-                    self.reposition()
-                }
-                shrinkWork = work
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: work)
-            }
-        }
-
+        contentChanged()
         let hadPending = presentation.pendingAttention
         presentation.update(sessions: sessions)
         let newlyNeedsAttention = !presentation.pendingAttention.subtracting(hadPending).isEmpty
         apply(attentionArrived: newlyNeedsAttention)
+    }
+
+    /// Resize the window for the current content: grow now, shrink once the card has animated down.
+    private func contentChanged() {
+        let needed = targetHeight
+        shrinkWork?.cancel()
+        if needed > sizedForHeight {
+            sizedForHeight = needed
+            reposition()
+        } else if needed < sizedForHeight {
+            let work = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.sizedForHeight = self.targetHeight
+                self.reposition()
+            }
+            shrinkWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: work)
+        }
+    }
+
+    private var targetHeight: CGFloat {
+        PanelMetrics.expandedHeight(count: store.sessions.count, usage: usage.usage)
     }
 
     // MARK: - Layout
@@ -139,7 +175,7 @@ final class EdgePanelController {
     private func reposition() {
         guard let screen else { return }
         let width = PanelMetrics.expandedWidth + PanelMetrics.shadowPadding
-        let height = PanelMetrics.expandedHeight(count: sizedForCount) + PanelMetrics.shadowPadding * 2
+        let height = max(sizedForHeight, targetHeight) + PanelMetrics.shadowPadding * 2
         let visible = screen.visibleFrame
         let frame = NSRect(x: screen.frame.maxX - width,
                            y: (visible.midY - height / 2).rounded(),
@@ -151,7 +187,7 @@ final class EdgePanelController {
     private func cardRect(expanded: Bool) -> NSRect {
         let count = store.sessions.count
         let w = expanded ? PanelMetrics.expandedWidth : PanelMetrics.collapsedWidth
-        let h = expanded ? PanelMetrics.expandedHeight(count: count)
+        let h = expanded ? PanelMetrics.expandedHeight(count: count, usage: usage.usage)
                          : PanelMetrics.collapsedHeight(count: count)
         let f = panel.frame
         return NSRect(x: f.maxX - w, y: f.midY - h / 2, width: w, height: h)
@@ -196,7 +232,7 @@ final class EdgePanelController {
         let before = presentation
         presentation.setHovering(hovering)
         guard presentation != before else { return }
-        if hovering { leftAt = nil }
+        if hovering { leftAt = nil; usage.refreshIfStale() }
         apply(attentionArrived: false)
     }
 
