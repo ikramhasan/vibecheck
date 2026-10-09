@@ -13,10 +13,12 @@ struct UsageSection: View {
                 .foregroundStyle(.white.opacity(0.45))
                 .textCase(.uppercase)
                 .tracking(0.4)
-                .frame(height: PanelMetrics.usageHeaderHeight, alignment: .bottomLeading)
+                .frame(maxWidth: .infinity, minHeight: PanelMetrics.usageHeaderHeight,
+                       maxHeight: PanelMetrics.usageHeaderHeight, alignment: .bottomLeading)
                 .padding(.horizontal, 18)
+                // Full-width hairline, matching the dividers between project groups.
                 .overlay(alignment: .top) {
-                    Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1).padding(.horizontal, 12)
+                    Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.horizontal, 18)
                 }
 
             let content = VStack(alignment: .leading, spacing: PanelMetrics.usageProviderGap) {

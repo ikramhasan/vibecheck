@@ -49,15 +49,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 enum DemoData {
-    static let sessions: [AgentSession] = [
-        AgentSession(agent: .init(id: "pi", name: "pi"), sessionID: "demo-1", cwd: NSHomeDirectory() + "/shop/web",
-                     status: .working, task: "Add a pricing page to the site",
-                     activity: "Reading src/pages/index.tsx", startedAt: .now),
-        AgentSession(agent: .init(id: "codex", name: "Codex"), sessionID: "demo-2", cwd: NSHomeDirectory() + "/shop/api",
-                     status: .needsAttention, task: "Add Stripe checkout to the pricing page",
-                     attention: .init(kind: .question, message: "Use Stripe Checkout or Payment Element?"),
-                     startedAt: .now.addingTimeInterval(1)),
-    ]
+    /// Sample projects under ~/Projects when they exist (so icons resolve), else made-up paths.
+    private static func project(_ name: String, fallback: String) -> String {
+        let real = NSHomeDirectory() + "/Home/Projects/" + name
+        return FileManager.default.fileExists(atPath: real) ? real : NSHomeDirectory() + "/" + fallback
+    }
+
+    static let sessions: [AgentSession] = {
+        let companion = project("AgentCompanion", fallback: "work/AgentCompanion")
+        let web = project("Gitrens", fallback: "work/shop-web")
+        let cli = NSHomeDirectory() + "/work/cli"
+        let now = Date.now
+        return [
+            AgentSession(agent: .init(id: "pi", name: "pi"), sessionID: "demo-1", cwd: companion + "/apps/macos",
+                         model: "claude-opus", status: .working, task: "Redesign collapsed tab and session list",
+                         activity: "Editing EdgePanelView.swift", startedAt: now.addingTimeInterval(-600),
+                         updatedAt: now.addingTimeInterval(-240)),
+            AgentSession(agent: .init(id: "claude", name: "Claude"), sessionID: "demo-2", cwd: web,
+                         status: .needsAttention, task: "Migrate auth middleware to edge runtime",
+                         attention: .init(kind: .permission, message: "Allow edit to config.prod.yml?"),
+                         startedAt: now.addingTimeInterval(-900), updatedAt: now.addingTimeInterval(-60)),
+            AgentSession(agent: .init(id: "codex", name: "Codex"), sessionID: "demo-3", cwd: web,
+                         status: .working, task: "Add Stripe checkout to pricing page", activity: "Running npm test",
+                         startedAt: now.addingTimeInterval(-1200), updatedAt: now.addingTimeInterval(-540)),
+            AgentSession(agent: .init(id: "cursor", name: "Cursor"), sessionID: "demo-4", cwd: cli,
+                         status: .idle, task: "Fix flaky snapshot test", activity: "Done · 3 files changed",
+                         startedAt: now.addingTimeInterval(-2400), updatedAt: now.addingTimeInterval(-720)),
+        ]
+    }()
 }
 
 /// Canned usage for `--demo`: no CLI, no network.

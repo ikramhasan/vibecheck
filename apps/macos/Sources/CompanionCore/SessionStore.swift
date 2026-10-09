@@ -51,7 +51,17 @@ public final class SessionStore {
                 merged[s.id] = s
             }
         }
-        let next = merged.values.sorted {
+        let previous = Dictionary(sessions.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let next = merged.values.map { s -> AgentSession in
+            var s = s
+            if let old = previous[s.id], old.status == s.status {
+                s.statusSince = old.statusSince
+            } else {
+                // Status changed, or first sighting: the last report is the best guess.
+                s.statusSince = s.updatedAt
+            }
+            return s
+        }.sorted {
             ($0.startedAt ?? $0.updatedAt, $0.id) < ($1.startedAt ?? $1.updatedAt, $1.id)
         }
         guard next != sessions else { return }

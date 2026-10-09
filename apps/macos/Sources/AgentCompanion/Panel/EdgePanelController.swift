@@ -11,16 +11,47 @@ enum PanelMetrics {
     /// Beyond this many sessions the expanded list scrolls and the tab shows "+N".
     static let maxVisible = 6
 
-    static let collapsedWidth: CGFloat = 34
-    static let collapsedSlot: CGFloat = 30
+    // Collapsed tab: one project badge per session.
+    static let collapsedWidth: CGFloat = 44
+    static let badgeSize: CGFloat = 26
+    static let collapsedSlot: CGFloat = badgeSize + 7
     static func collapsedHeight(count: Int) -> CGFloat {
         let slots = min(max(count, 1), maxVisible) + (count > maxVisible ? 1 : 0)
-        return flare * 2 + 20 + CGFloat(slots) * collapsedSlot
+        return flare * 2 + 16 + CGFloat(slots) * collapsedSlot
     }
 
     static let expandedWidth: CGFloat = 340
     static let headerHeight: CGFloat = 44
-    static let rowHeight: CGFloat = 76
+
+    // Session list, grouped by project.
+    static let groupHeader: CGFloat = 26
+    static let groupPadding: CGFloat = 10      // top + bottom inside a group
+    static let groupDivider: CGFloat = 5       // gap between groups (hairline centred)
+    static let sessionLine: CGFloat = 24
+    static let detailLine: CGFloat = 16
+    static let emptyListHeight: CGFloat = 56
+    static let maxListHeight: CGFloat = 380
+
+    /// Attention and error sessions always show a second line (the task, or the error).
+    static func hasDetail(_ session: AgentSession) -> Bool {
+        session.status == .needsAttention || session.status == .error
+    }
+
+    static func groupHeight(_ group: SessionGroup) -> CGFloat {
+        groupHeader + groupPadding + group.sessions.reduce(0) {
+            $0 + sessionLine + (hasDetail($1) ? detailLine : 0)
+        }
+    }
+
+    static func listContentHeight(_ groups: [SessionGroup]) -> CGFloat {
+        guard !groups.isEmpty else { return emptyListHeight }
+        return groups.map(groupHeight).reduce(0, +) + CGFloat(groups.count - 1) * groupDivider
+    }
+
+    static func listHeight(_ groups: [SessionGroup], hasUsage: Bool) -> CGFloat {
+        if groups.isEmpty && hasUsage { return 0 }
+        return min(listContentHeight(groups), maxListHeight)
+    }
 
     // Usage section
     static let usageHeaderHeight: CGFloat = 30
@@ -37,15 +68,8 @@ enum PanelMetrics {
         return usageHeaderHeight + min(body, maxUsageHeight)
     }
 
-    /// Session rows shown; zero only when usage fills the panel on its own.
-    static func sessionSlots(count: Int, hasUsage: Bool) -> Int {
-        count == 0 && hasUsage ? 0 : min(max(count, 1), maxVisible)
-    }
-
-    static func expandedHeight(count: Int, usage: [ProviderUsage] = []) -> CGFloat {
-        flare * 2 + headerHeight
-            + CGFloat(sessionSlots(count: count, hasUsage: !usage.isEmpty)) * rowHeight
-            + usageHeight(usage) + 12
+    static func expandedHeight(groups: [SessionGroup], usage: [ProviderUsage] = []) -> CGFloat {
+        flare * 2 + headerHeight + listHeight(groups, hasUsage: !usage.isEmpty) + usageHeight(usage) + 12
     }
 
     /// The Settings page has a fixed height; its content scrolls.
@@ -89,6 +113,13 @@ final class EdgePanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
+/// The panel never activates the app, so AppKit treats the first click on it as a
+/// "focus the window" click and SwiftUI drops it. Accepting the first mouse makes
+/// every click (session lines, header buttons) act immediately.
+final class FirstClickHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
 @MainActor
 final class EdgePanelController {
     private let store: SessionStore
@@ -117,7 +148,7 @@ final class EdgePanelController {
                                  onCloseSettings: { [weak self] in self?.showPage(.sessions) },
                                  onQuit: { NSApp.terminate(nil) })
             .environment(settings)
-        let hosting = NSHostingView(rootView: root)
+        let hosting = FirstClickHostingView(rootView: root)
         hosting.sizingOptions = []
         panel.contentView = hosting
 
@@ -217,7 +248,7 @@ final class EdgePanelController {
     private var targetHeight: CGFloat {
         state.page == .settings
             ? PanelMetrics.settingsHeight
-            : PanelMetrics.expandedHeight(count: store.sessions.count, usage: usage.usage)
+            : PanelMetrics.expandedHeight(groups: ProjectIcons.shared.groups(store.sessions), usage: usage.usage)
     }
 
     // MARK: - Layout

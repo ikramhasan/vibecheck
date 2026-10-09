@@ -15,6 +15,7 @@ public enum StatusFileDecoder {
         var agent: AgentSession.AgentInfo
         var session: Session
         var pid: Int32?
+        var origin: AgentSession.Origin?
         var status: AgentSession.Status
         var task: String?
         var activity: String?
@@ -41,7 +42,7 @@ public enum StatusFileDecoder {
         }
         return AgentSession(agent: file.agent, sessionID: file.session.id, cwd: file.session.cwd,
                             name: file.session.name.nonEmpty, model: file.session.model.nonEmpty,
-                            pid: file.pid, status: file.status, task: file.task.nonEmpty,
+                            pid: file.pid, origin: file.origin, status: file.status, task: file.task.nonEmpty,
                             activity: file.activity.nonEmpty, attention: file.attention,
                             startedAt: file.startedAt, updatedAt: file.updatedAt)
     }

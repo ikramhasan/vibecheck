@@ -29,6 +29,14 @@
       "type": "integer",
       "description": "PID of the long-lived agent process. The app drops the session once this process exits. Omit only if unknown; the app then falls back to an updatedAt staleness timeout."
     },
+    "origin": {
+      "type": "object",
+      "description": "Which app the session runs in, so the app can bring it forward. Optional; the app prefers walking the process tree from pid and uses this when the tree is broken (e.g. tmux).",
+      "properties": {
+        "bundleId": { "type": "string", "description": "Bundle id of the launching app (__CFBundleIdentifier), e.g. com.googlecode.iterm2, com.t3tools.t3code." },
+        "termProgram": { "type": "string", "description": "TERM_PROGRAM, e.g. Apple_Terminal, iTerm.app, ghostty, WezTerm, vscode." }
+      }
+    },
     "status": {
       "enum": ["working", "needs_attention", "idle", "error"],
       "description": "working: agent is busy. needs_attention: agent is blocked on the user. idle: finished, waiting for the next prompt. error: last run failed."

@@ -12,6 +12,9 @@
 import { mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { detectOrigin, type SessionOrigin } from "./origin.ts";
+
+export type { SessionOrigin } from "./origin.ts";
 
 export const SCHEMA_VERSION = 1;
 
@@ -43,6 +46,13 @@ export interface ReporterOptions {
 	directory?: string;
 	/** Minimum gap between writes that only change activity text. */
 	throttleMs?: number;
+	/**
+	 * Which app the session runs in, so clicking it can bring that app forward.
+	 * Defaults to detecting it from this process's environment, which is right for
+	 * in-process extensions and for hook commands the agent spawns (they inherit
+	 * its environment). Pass `null` to omit.
+	 */
+	origin?: SessionOrigin | null;
 }
 
 /** Same resolution rules as the app: AGENT_COMPANION_DIR, else Application Support. */
@@ -70,6 +80,7 @@ export class SessionReporter {
 	private readonly sessionId: string;
 	private readonly pid: number;
 	private readonly startedAt = new Date().toISOString();
+	private readonly origin: SessionOrigin | undefined;
 	private readonly throttleMs: number;
 	private state: SessionState;
 	private lastWrite = 0;
@@ -84,6 +95,7 @@ export class SessionReporter {
 		this.state = { ...options.initial };
 		this.throttleMs = options.throttleMs ?? 150;
 		this.dir = options.directory ?? statusDirectory();
+		this.origin = options.origin === null ? undefined : (options.origin ?? detectOrigin());
 		this.file = join(this.dir, `${safeSegment(this.agent.id)}--${safeSegment(this.sessionId)}.json`);
 		// Best effort if the host never runs its shutdown hook.
 		process.once("exit", this.onExit);
@@ -137,6 +149,7 @@ export class SessionReporter {
 			agent: this.agent,
 			session: { id: this.sessionId, cwd: s.cwd, name: s.name, model: s.model },
 			pid: this.pid,
+			origin: this.origin,
 			status: s.status,
 			task: s.task,
 			activity: s.activity,
