@@ -181,16 +181,6 @@ public struct SessionGroup: Identifiable, Hashable, Sendable {
         self.sessions = sessions
     }
 
-    /// Lower is more urgent.
-    public static func urgency(_ status: AgentSession.Status) -> Int {
-        switch status {
-        case .needsAttention: 0
-        case .error: 1
-        case .working: 2
-        case .idle: 3
-        }
-    }
-
     /// Groups keep the order of their most urgent session; ties keep the input order
     /// (the store sorts by start time), so lists don't reshuffle on every update.
     public static func make(_ sessions: [AgentSession], project: (String) -> ProjectInfo) -> [SessionGroup] {
@@ -201,12 +191,12 @@ public struct SessionGroup: Identifiable, Hashable, Sendable {
             if groups[p.root] == nil { order.append(p.root); groups[p.root] = SessionGroup(project: p, sessions: []) }
             groups[p.root]!.sessions.append(s)
         }
-        let rank: (AgentSession) -> Int = { urgency($0.status) }
+        let rank: (AgentSession) -> Int = { StatusPresentation($0).urgency }
         var result = order.compactMap { groups[$0] }
         for i in result.indices {
             result[i].sessions = stableSorted(result[i].sessions, by: rank)
         }
-        return stableSorted(result) { $0.sessions.map(rank).min() ?? 3 }
+        return stableSorted(result) { $0.sessions.map(rank).min() ?? StatusPresentation.leastUrgent }
     }
 
     private static func stableSorted<T>(_ items: [T], by key: (T) -> Int) -> [T] {

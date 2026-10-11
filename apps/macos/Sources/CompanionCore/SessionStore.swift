@@ -1,9 +1,8 @@
 import Foundation
 import Observation
 
-/// Merges every registered `SessionSource` into one list for the UI.
-/// Adding an agent = adding a source (or, usually, nothing at all: reporter-based
-/// agents all arrive through the single `StatusDirectorySource`).
+/// Merges every registered `SessionSource` into one list for the UI. When two sources
+/// report the same session, the one registered first wins.
 @MainActor
 @Observable
 public final class SessionStore {
@@ -43,11 +42,11 @@ public final class SessionStore {
 
     private func recompute() {
         var merged: [String: AgentSession] = [:]
-        for list in bySource.values {
+        for list in sources.compactMap({ bySource[ObjectIdentifier($0)] }) {
             for s in list where !seenAgents.contains(where: { $0.id == s.agent.id }) {
                 seenAgents.append(s.agent)
             }
-            for s in list where !hiddenAgents.contains(s.agent.id) && (merged[s.id]?.updatedAt ?? .distantPast) <= s.updatedAt {
+            for s in list where !hiddenAgents.contains(s.agent.id) && merged[s.id] == nil {
                 merged[s.id] = s
             }
         }

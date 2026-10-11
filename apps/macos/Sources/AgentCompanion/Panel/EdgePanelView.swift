@@ -155,7 +155,7 @@ private struct SessionBadge: View {
         let size = PanelMetrics.badgeSize
         ZStack {
             ProjectBadge(project: project, size: size - 6)
-            StatusOutline(status: session.status, size: size)
+            StatusOutline(session: session, size: size)
         }
         .frame(width: size, height: size)
         .overlay(alignment: .bottomTrailing) {
@@ -170,16 +170,18 @@ private struct SessionBadge: View {
 }
 
 /// Rounded-square outline around a project badge: spinning arc while working,
-/// breathing orange for attention, steady green/red when done/failed.
+/// breathing for attention, steady otherwise. Color and motion come from `StatusPresentation`.
 private struct StatusOutline: View {
-    let status: AgentSession.Status
+    let session: AgentSession
     let size: CGFloat
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: size * 0.31, style: .continuous)
-        switch status {
-        case .working:
+        let presentation = StatusPresentation(session)
+        let color = presentation.tint.color
+        switch presentation.motion {
+        case .travel:
             ZStack {
                 shape.strokeBorder(Color.white.opacity(0.1), lineWidth: 1.6)
                 // The arc travels along the outline (the square itself never rotates).
@@ -190,56 +192,72 @@ private struct StatusOutline: View {
                     let arc = StrokeStyle(lineWidth: 1.6, lineCap: .round)
                     ZStack {
                         shape.inset(by: 0.8).trim(from: start, to: min(end, 1))
-                            .stroke(LoaderPalette.accent, style: arc)
+                            .stroke(color, style: arc)
                         if end > 1 {
                             shape.inset(by: 0.8).trim(from: 0, to: end - 1)
-                                .stroke(LoaderPalette.accent, style: arc)
+                                .stroke(color, style: arc)
                         }
                     }
                 }
             }
-        case .needsAttention:
+        case .pulse:
             TimelineView(.animation(paused: reduceMotion)) { context in
                 let pulse = reduceMotion ? 1 : (sin(context.date.timeIntervalSinceReferenceDate * 4) + 1) / 2
-                shape.strokeBorder(Color.orange.opacity(0.45 + 0.55 * pulse), lineWidth: 1.6)
+                shape.strokeBorder(color.opacity(0.45 + 0.55 * pulse), lineWidth: 1.6)
             }
-        case .idle:
-            shape.strokeBorder(Color.green.opacity(0.7), lineWidth: 1.6)
-        case .error:
-            shape.strokeBorder(Color(red: 1, green: 0.42, blue: 0.4), lineWidth: 1.6)
+        case .still:
+            shape.strokeBorder(color.opacity(0.75), lineWidth: 1.6)
         }
     }
 }
 
 struct StatusIndicator: View {
-    let status: AgentSession.Status
-    let agentID: String
+    let session: AgentSession
     var size: CGFloat = 16
     @Environment(AppSettings.self) private var settings
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        switch status {
+        let presentation = StatusPresentation(session)
+        let color = presentation.tint.color
+        switch session.status {
         case .working:
-            LoaderView(style: settings.loader.style(for: agentID), size: size)
+            LoaderView(style: settings.loader.style(for: session.agent.id), size: size)
         case .needsAttention:
-            TimelineView(.animation) { context in
+            TimelineView(.animation(paused: reduceMotion)) { context in
                 let t = context.date.timeIntervalSinceReferenceDate
-                let pulse = (sin(t * 4) + 1) / 2
+                let pulse = reduceMotion ? 0 : (sin(t * 4) + 1) / 2
                 ZStack {
-                    Circle().fill(Color.orange.opacity(0.25 * (1 - pulse)))
+                    Circle().fill(color.opacity(0.25 * (1 - pulse)))
                         .scaleEffect(0.6 + 0.4 * pulse)
-                    Circle().fill(Color.orange).frame(width: size * 0.55, height: size * 0.55)
+                    Circle().fill(color).frame(width: size * 0.55, height: size * 0.55)
                 }
             }
             .frame(width: size, height: size)
         case .idle:
-            Image(systemName: "checkmark.circle.fill")
+            Image(systemName: session.wasInterrupted ? "stop.circle.fill" : "checkmark.circle.fill")
                 .font(.system(size: size))
-                .foregroundStyle(.green)
+                .foregroundStyle(color)
+        case .blocked:
+            Image(systemName: "hourglass.circle.fill")
+                .font(.system(size: size))
+                .foregroundStyle(color)
         case .error:
             Image(systemName: "exclamationmark.circle.fill")
                 .font(.system(size: size))
-                .foregroundStyle(.red)
+                .foregroundStyle(color)
+        }
+    }
+}
+
+extension StatusPresentation.Tint {
+    var color: Color {
+        switch self {
+        case .accent: LoaderPalette.accent
+        case .attention: .orange
+        case .success: .green
+        case .muted: Color(white: 0.6)
+        case .failure: Color(red: 1, green: 0.42, blue: 0.4)
         }
     }
 }
@@ -286,6 +304,10 @@ private struct ExpandedContent: View {
         .padding(.bottom, PanelMetrics.flare + 6)
     }
 
+    private var waitingCount: Int {
+        groups.reduce(0) { $0 + $1.sessions.filter(\.needsAttention).count }
+    }
+
     private var header: some View {
         HStack {
             Text("Agents")
@@ -296,6 +318,13 @@ private struct ExpandedContent: View {
                 .foregroundStyle(.white.opacity(0.5))
                 .padding(.horizontal, 6).padding(.vertical, 1)
                 .background(Capsule().fill(Color.white.opacity(0.08)))
+            if waitingCount > 0 {
+                Text("\(waitingCount) waiting")
+                    .font(.system(size: 11, weight: .medium).monospacedDigit())
+                    .foregroundStyle(Color.orange)
+                    .padding(.horizontal, 6).padding(.vertical, 1)
+                    .background(Capsule().fill(Color.orange.opacity(0.14)))
+            }
             Spacer()
             HeaderButton(systemImage: "gearshape", label: "Settings", action: onOpenSettings)
             HeaderButton(systemImage: "power", label: "Quit Agent Companion", action: onQuit)
@@ -390,9 +419,8 @@ private struct ProjectGroupView: View {
     }
 }
 
-/// status · agent · title · elapsed. Attention/error sessions add a second line;
-/// for the rest, hovering shows the live activity in the tooltip. Clicking brings
-/// forward the app the session runs in.
+/// status · agent · title · context · elapsed, then the state and live activity (or the
+/// task, when the title is a question). Clicking brings forward the session's app.
 private struct SessionLine: View {
     let session: AgentSession
     let highlighted: Bool
@@ -404,15 +432,18 @@ private struct SessionLine: View {
             HStack(spacing: 8) {
                 // Same width as the project icon above, so the columns line up:
                 // status under the icon, agent under the project name.
-                StatusIndicator(status: session.status, agentID: session.agent.id, size: 11)
+                StatusIndicator(session: session, size: 11)
                     .frame(width: 18)
                 AgentGlyph(agentID: session.agent.id, size: 12)
-                Text(title)
+                Text(StatusPresentation.headline(session))
                     .font(.system(size: 12))
                     .foregroundStyle(titleColor)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Spacer(minLength: 6)
+                if let context = session.context {
+                    ContextGauge(usage: context)
+                }
                 TimelineView(.periodic(from: .now, by: 30)) { context in
                     Text(elapsed(now: context.date))
                         .font(.system(size: 11).monospacedDigit())
@@ -421,7 +452,7 @@ private struct SessionLine: View {
             }
             .frame(height: PanelMetrics.sessionLine)
 
-            if PanelMetrics.hasDetail(session) {
+            if let detail = StatusPresentation.detail(session) {
                 Text(detail)
                     .font(.system(size: 11))
                     .foregroundStyle(.white.opacity(0.42))
@@ -451,29 +482,10 @@ private struct SessionLine: View {
         .accessibilityAction { SessionJumper.jump(to: session) }
     }
 
-    private var task: String { session.task ?? session.name ?? "New session" }
-
-    /// Attention shows the question up front; errors show the task with the error below.
-    private var title: String {
-        switch session.status {
-        case .needsAttention: session.attention?.message ?? "Needs your attention"
-        default: task
-        }
-    }
-
-    private var detail: String {
-        switch session.status {
-        case .needsAttention: task
-        case .error: session.activity ?? "Run failed"
-        default: ""
-        }
-    }
-
     private var titleColor: Color {
         switch session.status {
         case .needsAttention: Color(red: 1, green: 0.82, blue: 0.54)
-        case .error: .white.opacity(0.9)
-        case .working: .white.opacity(0.9)
+        case .error, .working, .blocked: .white.opacity(0.9)
         case .idle: session.task == nil ? .white.opacity(0.45) : .white.opacity(0.62)
         }
     }
@@ -486,21 +498,56 @@ private struct SessionLine: View {
 
     private var tooltip: String {
         var parts = ["\(session.agent.name)\(session.model.map { " · \($0)" } ?? "")"]
-        if let activity = session.activity, !activity.isEmpty { parts.append(activity) }
-        if session.status == .needsAttention { parts.append(task) }
+        parts.append([StatusPresentation(session).word, session.activity].compactMap { $0 }.joined(separator: " · "))
+        if session.status == .needsAttention { parts.append(StatusPresentation.task(session)) }
+        if let context = session.context { parts.append(ContextGauge.summary(context)) }
         parts.append(ProjectGroupView.abbreviate(session.cwd))
         if let app = target?.appName { parts.append("Click to open \(app)") }
         return parts.joined(separator: "\n")
     }
 
     private var accessibilityText: String {
-        let state = switch session.status {
-        case .working: "working"
-        case .needsAttention: "waiting for you"
-        case .idle: "done"
-        case .error: "failed"
+        let detail = StatusPresentation.detail(session).map { ". \($0)" } ?? ""
+        return "\(session.agent.name), \(StatusPresentation(session).word): \(StatusPresentation.headline(session))\(detail)"
+    }
+}
+
+private struct ContextGauge: View {
+    let usage: AgentSession.ContextUsage
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ZStack {
+                Circle().stroke(Color.white.opacity(0.12), lineWidth: 1.6)
+                Circle().trim(from: 0, to: min(usage.fraction, 1))
+                    .stroke(color, style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            }
+            .frame(width: 9, height: 9)
+            Text("\(Int((usage.fraction * 100).rounded()))%")
+                .font(.system(size: 10, weight: .medium).monospacedDigit())
+                .foregroundStyle(usage.level == .normal ? .white.opacity(0.38) : color)
         }
-        return "\(session.agent.name), \(state): \(title)" + (detail.isEmpty ? "" : ". \(detail)")
+        .help(Self.summary(usage))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Context \(Int((usage.fraction * 100).rounded())) percent full")
+    }
+
+    private var color: Color {
+        switch usage.level {
+        case .normal: .white.opacity(0.5)
+        case .warning: .orange
+        case .critical: Color(red: 1, green: 0.42, blue: 0.4)
+        }
+    }
+
+    static func summary(_ usage: AgentSession.ContextUsage) -> String {
+        let text = "\(tokens(usage.usedTokens)) / \(tokens(usage.windowTokens)) tokens"
+        return usage.level == .critical ? text + " · Auto-compact likely soon" : text
+    }
+
+    private static func tokens(_ count: Int) -> String {
+        count >= 1_000_000 ? String(format: "%.1fM", Double(count) / 1_000_000) : "\(count / 1000)k"
     }
 }
 

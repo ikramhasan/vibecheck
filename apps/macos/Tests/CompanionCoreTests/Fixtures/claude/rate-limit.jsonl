@@ -1,0 +1,2 @@
+{"type":"user","isSidechain":false,"timestamp":"2026-10-11T10:00:00Z","message":{"role":"user","content":"Keep going"}}
+{"type":"assistant","isSidechain":false,"isApiErrorMessage":true,"error":"rate_limit","message":{"model":"<synthetic>","role":"assistant","stop_reason":"stop_sequence","content":[{"type":"text","text":"You've hit your session limit \u00b7 resets 3:47pm"}]}}

@@ -1,0 +1,3 @@
+{"timestamp":"2026-10-11T10:00:00Z","type":"session_meta","payload":{"id":"019c9446-4458-7ec0-980c-e2d97e99caf4","cwd":"/repo/shop","originator":"codex_cli_rs"}}
+{"timestamp":"2026-10-11T10:00:00Z","type":"event_msg","payload":{"type":"user_message","message":"Plan the runtime"}}
+{"timestamp":"2026-10-11T10:00:00Z","type":"response_item","payload":{"type":"function_call","name":"request_user_input","arguments":"{\"questions\": [{\"id\": \"q\", \"question\": \"How should v1 execute Python?\", \"options\": []}]}","call_id":"c4"}}

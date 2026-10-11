@@ -26,7 +26,8 @@ open apps/macos/build/AgentCompanion.app --args --demo              # sample ses
 open apps/macos/build/AgentCompanion.app --args --demo --settings   # also open Settings
 ```
 
-Without `--demo` the panel stays hidden until an agent reports a session (see pi below).
+Without `--demo` the panel shows running Claude Code, Codex and pi sessions by reading their
+own session files; nothing needs to be installed. It stays hidden while none are running.
 Hover the tab on the right screen edge to expand it; the gear opens Settings and the
 power button quits.
 
@@ -49,7 +50,11 @@ With any usage enabled the tab stays visible even when no agent is running. Usag
 5 minutes and when the panel opens with stale data. During `swift run`, set
 `AGENT_COMPANION_CODEXBAR=/path/to/CodexBarCLI` or have `codexbar` installed via Homebrew.
 
-## pi
+## pi extension (optional)
+
+pi sessions show up without it. The extension adds what pi's session files don't record:
+its confirm/select dialogs (shown as needing attention) and an exact link between the pi
+process and its session.
 
 ```bash
 pi install "$PWD/integrations/pi"     # uninstall: pi remove "$PWD/integrations/pi"

@@ -7,6 +7,7 @@ public struct AgentSession: Identifiable, Hashable, Sendable {
         case working
         case needsAttention = "needs_attention"
         case idle
+        case blocked
         case error
     }
 
@@ -29,6 +30,28 @@ public struct AgentSession: Identifiable, Hashable, Sendable {
         public init(bundleId: String? = nil, termProgram: String? = nil) {
             self.bundleId = bundleId
             self.termProgram = termProgram
+        }
+    }
+
+    public struct ContextUsage: Hashable, Sendable {
+        public var usedTokens: Int
+        public var windowTokens: Int
+
+        public init(usedTokens: Int, windowTokens: Int) {
+            self.usedTokens = usedTokens
+            self.windowTokens = windowTokens
+        }
+
+        public enum Level: Sendable { case normal, warning, critical }
+
+        public var fraction: Double { windowTokens > 0 ? Double(usedTokens) / Double(windowTokens) : 0 }
+
+        public var level: Level {
+            switch fraction {
+            case 0.9...: .critical
+            case 0.75...: .warning
+            default: .normal
+            }
         }
     }
 
@@ -57,14 +80,16 @@ public struct AgentSession: Identifiable, Hashable, Sendable {
     public var task: String?
     public var activity: String?
     public var attention: Attention?
+    public var context: ContextUsage?
+    public var wasInterrupted: Bool
     public var startedAt: Date?
     public var updatedAt: Date
     /// When `status` last changed, as observed by the app (set by `SessionStore`).
     public var statusSince: Date?
     public init(agent: AgentInfo, sessionID: String, cwd: String, name: String? = nil,
                 model: String? = nil, pid: Int32? = nil, origin: Origin? = nil, status: Status, task: String? = nil,
-                activity: String? = nil, attention: Attention? = nil, startedAt: Date? = nil,
-                updatedAt: Date = .now) {
+                activity: String? = nil, attention: Attention? = nil, context: ContextUsage? = nil,
+                wasInterrupted: Bool = false, startedAt: Date? = nil, updatedAt: Date = .now) {
         self.agent = agent
         self.sessionID = sessionID
         self.cwd = cwd
@@ -76,6 +101,8 @@ public struct AgentSession: Identifiable, Hashable, Sendable {
         self.task = task
         self.activity = activity
         self.attention = attention
+        self.context = context
+        self.wasInterrupted = wasInterrupted
         self.startedAt = startedAt
         self.updatedAt = updatedAt
     }

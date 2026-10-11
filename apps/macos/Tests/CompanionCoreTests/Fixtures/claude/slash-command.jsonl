@@ -1,0 +1,2 @@
+{"type":"user","isSidechain":false,"timestamp":"2026-10-11T10:00:00Z","message":{"role":"user","content":"<command-name>/compact</command-name>\n<command-message>compact</command-message>\n<command-args></command-args>"}}
+{"type":"user","isMeta":true,"message":{"role":"user","content":"Caveat: meta"}}

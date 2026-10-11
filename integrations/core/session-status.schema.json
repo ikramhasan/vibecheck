@@ -38,8 +38,8 @@
       }
     },
     "status": {
-      "enum": ["working", "needs_attention", "idle", "error"],
-      "description": "working: agent is busy. needs_attention: agent is blocked on the user. idle: finished, waiting for the next prompt. error: last run failed."
+      "enum": ["working", "needs_attention", "idle", "blocked", "error"],
+      "description": "working: agent is busy. needs_attention: agent is waiting on the user. idle: finished, waiting for the next prompt. blocked: stopped by a usage or rate limit. error: last run failed."
     },
     "task": { "type": "string", "description": "What the session is working on, usually the latest user prompt." },
     "activity": { "type": "string", "description": "Short, live description of the current step." },

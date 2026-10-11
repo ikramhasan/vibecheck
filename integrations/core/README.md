@@ -12,8 +12,12 @@ one JSON file per live session to:
 - Write atomically (temp file + rename). Delete the file when the session ends.
 - Include `pid` of the long-lived agent process. The app prunes files whose
   process has exited, so crashes don't leave ghost sessions.
-- `status` is `working`, `needs_attention`, `idle` or `error`. `needs_attention`
-  expands the panel automatically.
+- `status` is `working`, `needs_attention`, `idle`, `blocked` or `error`.
+  `needs_attention` expands the panel automatically.
+- The app also reads Claude Code, Codex and pi transcripts directly, with nothing
+  installed. A status file is only needed for what transcripts can't show
+  (permission prompts, dialogs). When both describe the same session (same agent
+  id and session id), the status file wins.
 
 ## Adding an agent
 

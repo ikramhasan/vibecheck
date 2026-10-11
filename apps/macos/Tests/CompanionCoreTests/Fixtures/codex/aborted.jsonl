@@ -1,0 +1,4 @@
+{"timestamp":"2026-10-11T10:00:00Z","type":"session_meta","payload":{"id":"019c9446-4458-7ec0-980c-e2d97e99caf4","cwd":"/repo/shop","originator":"codex_cli_rs"}}
+{"timestamp":"2026-10-11T10:00:00Z","type":"event_msg","payload":{"type":"user_message","message":"Long task"}}
+{"timestamp":"2026-10-11T10:00:00Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\": \"sleep 100\"}","call_id":"c5"}}
+{"timestamp":"2026-10-11T10:00:00Z","type":"event_msg","payload":{"type":"turn_aborted","reason":"interrupted"}}

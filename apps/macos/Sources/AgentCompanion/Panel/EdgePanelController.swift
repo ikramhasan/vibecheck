@@ -32,9 +32,8 @@ enum PanelMetrics {
     static let emptyListHeight: CGFloat = 56
     static let maxListHeight: CGFloat = 380
 
-    /// Attention and error sessions always show a second line (the task, or the error).
     static func hasDetail(_ session: AgentSession) -> Bool {
-        session.status == .needsAttention || session.status == .error
+        StatusPresentation.detail(session) != nil
     }
 
     static func groupHeight(_ group: SessionGroup) -> CGFloat {

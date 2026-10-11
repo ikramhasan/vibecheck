@@ -1,0 +1,6 @@
+{"timestamp":"2026-10-11T10:00:00Z","type":"session_meta","payload":{"id":"019c9446-4458-7ec0-980c-e2d97e99caf4","cwd":"/repo/shop","originator":"codex_cli_rs"}}
+{"timestamp":"2026-10-11T10:00:00Z","type":"event_msg","payload":{"type":"task_started","turn_id":"t"}}
+{"timestamp":"2026-10-11T10:00:00Z","type":"event_msg","payload":{"type":"user_message","message":"Run the build"}}
+{"timestamp":"2026-10-11T10:00:00Z","type":"response_item","payload":{"type":"custom_tool_call","name":"apply_patch","input":"*** Begin Patch","call_id":"c2"}}
+{"timestamp":"2026-10-11T10:00:00Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"c2","output":"ok"}}
+{"timestamp":"2026-10-11T10:00:00Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\": \"swift build\"}","call_id":"c3"}}

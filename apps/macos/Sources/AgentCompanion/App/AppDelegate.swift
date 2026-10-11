@@ -9,13 +9,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let args = CommandLine.arguments
-        let source: SessionSource = args.contains("--demo")
-            ? StaticSessionSource(DemoData.sessions)
-            : StatusDirectorySource()
-
-        // Register further non-reporter sources here, e.g. a log-tailing source
-        // for an agent that can't run an integration hook.
-        let store = SessionStore(sources: [source])
+        let sources: [SessionSource] = args.contains("--demo")
+            ? [StaticSessionSource(DemoData.sessions)]
+            : [StatusDirectorySource(), TranscriptSessionSource()]
+        let store = SessionStore(sources: sources)
         let usage = UsageStore(fetcher: args.contains("--demo") ? DemoUsage() : CodexBarCLI.locate())
         let settings = AppSettings()
         let controller = EdgePanelController(store: store, usage: usage, settings: settings)
@@ -71,6 +68,7 @@ enum DemoData {
                          startedAt: now.addingTimeInterval(-900), updatedAt: now.addingTimeInterval(-60)),
             AgentSession(agent: .init(id: "codex", name: "Codex"), sessionID: "demo-3", cwd: web,
                          status: .working, task: "Add Stripe checkout to pricing page", activity: "Running npm test",
+                         context: .init(usedTokens: 196_000, windowTokens: 258_400),
                          startedAt: now.addingTimeInterval(-1200), updatedAt: now.addingTimeInterval(-540)),
             AgentSession(agent: .init(id: "cursor", name: "Cursor"), sessionID: "demo-4", cwd: cli,
                          status: .idle, task: "Fix flaky snapshot test", activity: "Done · 3 files changed",
