@@ -8,6 +8,24 @@
   abstractions, extension points or defensive code for cases that can't happen
   yet.
 
+## Never modify agent files
+
+Agent Companion only observes agents. Its code must never write, move, rename,
+delete, truncate, lock, or change the attributes of any file an agent owns:
+transcripts, session registries (`~/.claude/sessions/`, `~/.codex/`, pi's
+session folders), settings, logs, or anything else under an agent's data
+directories.
+
+- Open agent files read-only (`FileHandle(forReadingFrom:)`, `O_RDONLY`,
+  `O_EVTONLY`), and only to read or watch them.
+- The app may write only to its own locations: the status directory
+  (`~/Library/Application Support/AgentCompanion/sessions`, or
+  `$AGENT_COMPANION_DIR`) and its own preferences.
+- Opt-in hooks and extensions may write only status files to that status
+  directory. Installing them is the user's choice and is documented, never done
+  silently.
+- Tests that need to write use temp files or fixtures, never real agent data.
+
 ## Reference projects
 
 Third-party projects cloned into `reference/` to study or port from. The whole
