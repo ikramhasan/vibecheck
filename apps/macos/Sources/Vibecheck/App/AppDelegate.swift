@@ -6,10 +6,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var store: SessionStore?
     private var usage: UsageStore?
     private var servers: DevServerStore?
+    private var actions: ActionStore?
     private var controller: EdgePanelController?
     private var soundPlanner = SoundPlanner()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        EditMenu.install()
         let args = CommandLine.arguments
         let sources: [SessionSource] = args.contains("--demo")
             ? [StaticSessionSource(DemoData.sessions)]
@@ -20,10 +22,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let servers = args.contains("--demo")
             ? DevServerStore(agentPIDs: { [] }, scan: { _ in DemoData.servers }, terminate: { _, _ in })
             : DevServerStore(agentPIDs: { store.agentPIDs }, terminate: ServerTerminator.stop)
-        let controller = EdgePanelController(store: store, usage: usage, servers: servers, settings: settings)
+        let actions = args.contains("--demo") ? DemoData.actionStore() : ActionStore()
+        let controller = EdgePanelController(store: store, usage: usage, servers: servers, actions: actions,
+                                             settings: settings)
         self.store = store
         self.usage = usage
         self.servers = servers
+        self.actions = actions
         self.controller = controller
 
         observeAgentPreferences(settings) { prefs in
@@ -55,6 +60,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Task { @MainActor in self?.observeSessions(store, apply) }
         }
         apply(sessions)
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let actions, let first = actions.running.first else { return .terminateNow }
+        let count = actions.running.count
+        let alert = NSAlert()
+        let name = actions.action(first.actionID)?.name ?? "An action"
+        alert.messageText = count == 1 ? "\(name) is still running" : "\(count) actions are still running"
+        alert.informativeText = "Stop \(count == 1 ? "it" : "them") before quitting, or leave \(count == 1 ? "it" : "them") "
+            + "running in the background. vibecheck won't show \(count == 1 ? "its" : "their") status after it quits."
+        alert.addButton(withTitle: "Stop and Quit")
+        alert.addButton(withTitle: "Leave Running")
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate()
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            Task {
+                await actions.stopAll()
+                NSApp.reply(toApplicationShouldTerminate: true)
+            }
+            return .terminateLater
+        case .alertSecondButtonReturn:
+            return .terminateNow
+        default:
+            return .terminateCancel
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -105,6 +136,18 @@ enum DemoData {
                          startedAt: now.addingTimeInterval(-1800), updatedAt: now.addingTimeInterval(-300)),
         ]
     }()
+
+    @MainActor static func actionStore() -> ActionStore {
+        let suite = "com.ikramulhasan.vibecheck.demo"
+        UserDefaults.standard.removePersistentDomain(forName: suite)
+        let store = ActionStore(defaults: UserDefaults(suiteName: suite)!,
+                                logDirectory: FileManager.default.temporaryDirectory.appending(path: "vibecheck-demo-actions"))
+        let companion = project("AgentCompanion", fallback: "work/AgentCompanion")
+        store.save(QuickAction(name: "Run tests", command: "swift test", directory: companion + "/apps/macos"))
+        store.save(QuickAction(name: "Build app", command: "scripts/bundle.sh", directory: companion + "/apps/macos"))
+        store.save(QuickAction(name: "Start site", command: "npm run dev", directory: project("Gitrens", fallback: "work/shop-web")))
+        return store
+    }
 
     static let servers: [DevServer] = {
         let web = project("Gitrens", fallback: "work/shop-web")

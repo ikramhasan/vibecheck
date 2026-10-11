@@ -42,6 +42,35 @@ private func session(_ id: String, _ cwd: String, _ status: AgentSession.Status)
         #expect(p.name == "AgentCompanion")
     }
 
+    @Test func mapsPathsBetweenAWorktreeAndItsMainCheckout() throws {
+        let root = try tempDir()
+        let main = root.appending(path: "AgentCompanion")
+        try FileManager.default.createDirectory(at: main.appending(path: ".git/worktrees/feature"),
+                                                withIntermediateDirectories: true)
+        let worktree = root.appending(path: "wt/feature")
+        try touch(worktree.appending(path: ".git"), "gitdir: \(main.path)/.git/worktrees/feature\n")
+        let resolver = ProjectResolver(home: root.path)
+
+        #expect(resolver.checkout(for: worktree.appending(path: "apps/macos").path) == worktree.path)
+        #expect(resolver.checkout(for: main.appending(path: "apps/macos").path) == main.path)
+        #expect(resolver.mainCheckoutPath(for: worktree.appending(path: "apps/macos").path)
+            == main.appending(path: "apps/macos").path)
+        #expect(resolver.mainCheckoutPath(for: main.path) == main.path)
+        #expect(resolver.path(main.appending(path: "apps/macos").path, inCheckout: worktree.path)
+            == worktree.appending(path: "apps/macos").path)
+        #expect(resolver.path(main.path, inCheckout: main.path) == main.path)
+    }
+
+    @Test func pathsOutsideGitStayPut() throws {
+        let root = try tempDir()
+        let scratch = root.appending(path: "scratch")
+        try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        let resolver = ProjectResolver(home: root.path)
+        #expect(resolver.mainCheckoutPath(for: scratch.path) == scratch.path)
+        #expect(resolver.path(scratch.path, inCheckout: root.appending(path: "other").path)
+            == root.appending(path: "other").path)
+    }
+
     @Test func outsideGitUsesTheDirectoryAndStopsAtHome() throws {
         let home = try tempDir()
         try FileManager.default.createDirectory(at: home.appending(path: ".git"), withIntermediateDirectories: true)
