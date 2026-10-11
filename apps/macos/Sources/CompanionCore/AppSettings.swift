@@ -109,33 +109,6 @@ public struct AgentPreferences: Equatable, Codable, Sendable {
     }
 }
 
-public struct AlertSettings: Equatable, Codable, Sendable {
-    public static let delayChoices = [0, 5, 10, 30, 60]
-
-    public var delaySeconds: Int
-    public var needsInput: Bool
-    public var finished: Bool
-    public var problems: Bool
-
-    public init(delaySeconds: Int = 10, needsInput: Bool = true, finished: Bool = true, problems: Bool = true) {
-        self.delaySeconds = delaySeconds
-        self.needsInput = needsInput
-        self.finished = finished
-        self.problems = problems
-    }
-
-    private enum CodingKeys: String, CodingKey { case delaySeconds, needsInput, finished, problems }
-
-    public init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        let defaults = AlertSettings()
-        self.init(delaySeconds: (try? c.decode(Int.self, forKey: .delaySeconds)) ?? defaults.delaySeconds,
-                  needsInput: (try? c.decode(Bool.self, forKey: .needsInput)) ?? defaults.needsInput,
-                  finished: (try? c.decode(Bool.self, forKey: .finished)) ?? defaults.finished,
-                  problems: (try? c.decode(Bool.self, forKey: .problems)) ?? defaults.problems)
-    }
-}
-
 /// User preferences, persisted to UserDefaults. Grows a property per setting group.
 @MainActor
 @Observable
@@ -148,23 +121,17 @@ public final class AppSettings {
         didSet { if agents != oldValue { save(agents, key: Keys.agents) } }
     }
 
-    public var alerts: AlertSettings {
-        didSet { if alerts != oldValue { save(alerts, key: Keys.alerts) } }
-    }
-
     @ObservationIgnored private let defaults: UserDefaults
 
     private enum Keys {
         static let loader = "settings.loader"
         static let agents = "settings.agents"
-        static let alerts = "settings.alerts"
     }
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         loader = Self.load(LoaderSettings.self, key: Keys.loader, from: defaults) ?? LoaderSettings()
         agents = Self.load(AgentPreferences.self, key: Keys.agents, from: defaults) ?? AgentPreferences()
-        alerts = Self.load(AlertSettings.self, key: Keys.alerts, from: defaults) ?? AlertSettings()
     }
 
     private func save<T: Encodable>(_ value: T, key: String) {
