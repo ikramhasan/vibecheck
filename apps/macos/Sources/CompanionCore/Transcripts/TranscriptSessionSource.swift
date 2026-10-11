@@ -115,7 +115,7 @@ final class TranscriptTracker {
         AgentSession(agent: live.agent, sessionID: live.sessionID, cwd: live.cwd,
                      name: live.name ?? timeline.title, model: timeline.model, pid: live.pid, origin: live.origin,
                      status: timeline.hasEvents ? timeline.status : live.statusWithoutTranscript,
-                     task: timeline.task, activity: timeline.activity, attention: timeline.attention,
+                     task: timeline.task, lastReply: timeline.lastReply, activity: timeline.activity, attention: timeline.attention,
                      context: timeline.context, wasInterrupted: timeline.wasInterrupted,
                      startedAt: live.startedAt, updatedAt: updatedAt)
     }

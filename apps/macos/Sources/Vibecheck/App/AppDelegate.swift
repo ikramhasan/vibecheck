@@ -96,8 +96,13 @@ enum DemoData {
                          context: .init(usedTokens: 196_000, windowTokens: 258_400),
                          startedAt: now.addingTimeInterval(-1200), updatedAt: now.addingTimeInterval(-540)),
             AgentSession(agent: .init(id: "cursor", name: "Cursor"), sessionID: "demo-4", cwd: cli,
-                         status: .idle, task: "Fix flaky snapshot test", activity: "Done · 3 files changed",
+                         status: .idle, task: "Fix flaky snapshot test",
+                         lastReply: "Fixed it. The snapshot depended on the system time zone, so I pinned it to UTC in the test setup.",
                          startedAt: now.addingTimeInterval(-2400), updatedAt: now.addingTimeInterval(-90)),
+            AgentSession(agent: .init(id: "claude", name: "Claude"), sessionID: "demo-5", cwd: companion,
+                         status: .idle, task: "Move the info bits to the description row",
+                         context: .init(usedTokens: 42_000, windowTokens: 200_000), wasInterrupted: true,
+                         startedAt: now.addingTimeInterval(-1800), updatedAt: now.addingTimeInterval(-300)),
         ]
     }()
 

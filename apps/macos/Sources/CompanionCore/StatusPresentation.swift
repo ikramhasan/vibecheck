@@ -53,7 +53,7 @@ public struct StatusPresentation: Equatable, Sendable {
         switch session.status {
         case .needsAttention: task(session)
         case .working, .blocked, .error: [StatusPresentation(session).word, session.activity].compactMap { $0 }.joined(separator: " · ")
-        case .idle: nil
+        case .idle: session.wasInterrupted ? "Interrupted" : session.lastReply
         }
     }
 

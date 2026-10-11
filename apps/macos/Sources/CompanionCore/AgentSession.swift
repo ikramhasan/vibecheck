@@ -122,6 +122,7 @@ public struct AgentSession: Identifiable, Hashable, Sendable {
     public var origin: Origin?
     public var status: Status
     public var task: String?
+    public var lastReply: String?
     public var activity: String?
     public var attention: Attention?
     public var context: ContextUsage?
@@ -132,7 +133,7 @@ public struct AgentSession: Identifiable, Hashable, Sendable {
     public var statusSince: Date?
     public init(agent: AgentInfo, sessionID: String, cwd: String, name: String? = nil,
                 model: String? = nil, pid: Int32? = nil, origin: Origin? = nil, status: Status, task: String? = nil,
-                activity: String? = nil, attention: Attention? = nil, context: ContextUsage? = nil,
+                lastReply: String? = nil, activity: String? = nil, attention: Attention? = nil, context: ContextUsage? = nil,
                 wasInterrupted: Bool = false, startedAt: Date? = nil, updatedAt: Date = .now) {
         self.agent = agent
         self.sessionID = sessionID
@@ -143,6 +144,7 @@ public struct AgentSession: Identifiable, Hashable, Sendable {
         self.origin = origin
         self.status = status
         self.task = task
+        self.lastReply = lastReply
         self.activity = activity
         self.attention = attention
         self.context = context

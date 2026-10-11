@@ -5,6 +5,7 @@ public struct SessionTimeline: Equatable, Sendable {
     public private(set) var activity: String?
     public private(set) var attention: AgentSession.Attention?
     public private(set) var task: String?
+    public private(set) var lastReply: String?
     public private(set) var title: String?
     public private(set) var model: String?
     public private(set) var context: AgentSession.ContextUsage?
@@ -27,6 +28,7 @@ public struct SessionTimeline: Equatable, Sendable {
         switch event {
         case .userPrompt(let text):
             task = TranscriptText.oneLine(text) ?? task
+            lastReply = nil
             startWorking(activity: text.hasPrefix("/compact") ? "Compacting…" : "Thinking…")
         case .latestPrompt(let text):
             if task == nil { task = TranscriptText.oneLine(text) }
@@ -34,7 +36,8 @@ public struct SessionTimeline: Equatable, Sendable {
             startWorking(activity: "Thinking…")
         case .thinking:
             continueWorking(activity: "Thinking…")
-        case .assistantText:
+        case .assistantText(let text):
+            lastReply = TranscriptText.oneLine(text) ?? lastReply
             continueWorking(activity: "Writing a response…")
         case .toolCall(let call):
             pending.append(call)

@@ -122,9 +122,9 @@ private func temporaryDirectory() throws -> URL {
 
 @Suite struct StatusPresentationTests {
     private func session(_ status: AgentSession.Status, kind: AgentSession.Attention.Kind? = nil,
-                         activity: String? = nil, interrupted: Bool = false) -> AgentSession {
+                         activity: String? = nil, lastReply: String? = nil, interrupted: Bool = false) -> AgentSession {
         AgentSession(agent: .init(id: "a", name: "A"), sessionID: "1", cwd: "/", status: status, task: "Task",
-                     activity: activity, attention: kind.map { .init(kind: $0, message: "Q?") },
+                     lastReply: lastReply, activity: activity, attention: kind.map { .init(kind: $0, message: "Q?") },
                      wasInterrupted: interrupted)
     }
 
@@ -146,5 +146,7 @@ private func temporaryDirectory() throws -> URL {
         #expect(StatusPresentation.detail(session(.needsAttention, kind: .question)) == "Task")
         #expect(StatusPresentation.headline(session(.needsAttention, kind: .question)) == "Q?")
         #expect(StatusPresentation.detail(session(.idle)) == nil)
+        #expect(StatusPresentation.detail(session(.idle, lastReply: "Fixed it.")) == "Fixed it.")
+        #expect(StatusPresentation.detail(session(.idle, lastReply: "Partial", interrupted: true)) == "Interrupted")
     }
 }
