@@ -68,6 +68,8 @@ pi install "$PWD/integrations/pi"     # uninstall: pi remove "$PWD/integrations/
   stays open until you've hovered over it. A new request re-opens it.
 - Notifications (Settings → Notifications): needs input, turn finished, blocked or
   failed, after a configurable delay. Clicking one jumps to the session.
+- Clicking a session selects its exact tab in Terminal or iTerm2 (and its tmux pane);
+  other apps are brought forward.
 
 ## Tests
 

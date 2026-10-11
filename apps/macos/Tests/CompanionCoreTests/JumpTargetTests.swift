@@ -35,3 +35,24 @@ private let agent = ProcessNode(pid: 100, name: "node")
         #expect(JumpResolver.resolve(origin: .init(termProgram: "tmux"), ancestry: []) == nil)
     }
 }
+
+@Suite struct TmuxTests {
+    @Test func readsSocketAndServerFromEnvironment() {
+        let env = "/private/tmp/tmux-501/default,4242,0"
+        #expect(Tmux.socketPath(fromEnvironment: env) == "/private/tmp/tmux-501/default")
+        #expect(Tmux.serverPID(fromEnvironment: env) == 4242)
+        #expect(Tmux.socketPath(fromEnvironment: nil) == nil)
+    }
+
+    @Test func findsPaneByTTY() {
+        let panes = "/dev/ttys004\tmain\t@1\t%1\n/dev/ttys007\twork\t@3\t%5\n"
+        #expect(Tmux.pane(forTTY: "/dev/ttys007", in: panes) == .init(session: "work", window: "@3", pane: "%5"))
+        #expect(Tmux.pane(forTTY: "/dev/ttys009", in: panes) == nil)
+    }
+
+    @Test func prefersMostRecentClientOnTheSameSession() {
+        let clients = "/dev/ttys001\tmain\t300\t11\n/dev/ttys002\twork\t100\t12\n/dev/ttys003\twork\t200\t13\n"
+        #expect(Tmux.bestClient(for: "work", in: clients)?.tty == "/dev/ttys003")
+        #expect(Tmux.bestClient(for: "other", in: clients)?.tty == "/dev/ttys001")
+    }
+}

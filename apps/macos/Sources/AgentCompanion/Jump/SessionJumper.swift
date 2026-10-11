@@ -5,7 +5,7 @@ import OSLog
 
 /// Brings forward the app a session runs in (terminal, T3 Code, an editor, …).
 /// Agent-neutral: derived from the reported origin and the session's process tree.
-/// Needs no permissions: it only activates apps, never scripts them.
+/// Scripting Terminal or iTerm2 asks for Automation access on the first jump there.
 @MainActor
 enum SessionJumper {
     private nonisolated static let log = Logger(subsystem: "com.ikramulhasan.AgentCompanion", category: "jump")
@@ -14,13 +14,29 @@ enum SessionJumper {
         JumpResolver.resolve(origin: session.origin, ancestry: session.pid.map(ProcessTree.ancestry) ?? [])
     }
 
-    /// Returns false when there's nowhere to go.
+    /// Returns false when there's nowhere to go. Selects the exact tab (and tmux pane)
+    /// in Terminal and iTerm2; other hosts are brought forward as a whole.
     @discardableResult
     static func jump(to session: AgentSession) -> Bool {
+        let agent = session.pid.flatMap(ProcessScanner.snapshot(pid:))
+        if let agent, let tty = agent.tty, let tmux = agent.environment["TMUX"],
+           let host = TmuxFocus.focus(paneTTY: tty, tmuxEnvironment: tmux),
+           let terminal = JumpResolver.resolve(origin: nil, ancestry: ProcessTree.ancestry(of: host.clientPID)) {
+            if TerminalFocus.focus(tty: host.clientTTY, bundleId: terminal.bundleId) { return true }
+            return activate(terminal)
+        }
         guard let target = target(for: session) else {
             log.info("No host app for \(session.id, privacy: .public)")
             return false
         }
+        if let tty = agent?.tty, TerminalFocus.supports(target.bundleId),
+           TerminalFocus.focus(tty: tty, bundleId: target.bundleId) {
+            return true
+        }
+        return activate(target)
+    }
+
+    private static func activate(_ target: JumpTarget) -> Bool {
         let running = target.appPID.flatMap(NSRunningApplication.init(processIdentifier:))
             ?? NSRunningApplication.runningApplications(withBundleIdentifier: target.bundleId).first
         guard let url = running?.bundleURL

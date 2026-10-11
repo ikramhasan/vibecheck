@@ -32,6 +32,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
+  <key>NSAppleEventsUsageDescription</key><string>Agent Companion selects the terminal tab an agent is running in when you click its session.</string>
 </dict>
 </plist>
 PLIST
