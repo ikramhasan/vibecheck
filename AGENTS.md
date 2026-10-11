@@ -20,6 +20,7 @@ git clone --depth 1 <url> reference/<name>
 | Project | License | Why it's here |
 |---|---|---|
 | [agentsview](https://github.com/kenn-io/agentsview) | MIT | Archive, search and cost tracking for ~60 agents. Its per-agent parsers in `internal/parser/` document where each agent stores sessions and what format it uses |
+| [thinking-orbs](https://github.com/yogesharc/thinking-orbs) | MIT | The dot-sphere status orbs. `apps/web/registry/orb/orb-core.ts` is ported to `apps/macos/Sources/AgentCompanion/Orbs/Orb.swift` |
 
 When code is ported from a project here, respect its license and credit it at
 the place it's used.

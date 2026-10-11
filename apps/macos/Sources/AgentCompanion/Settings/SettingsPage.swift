@@ -428,7 +428,7 @@ private struct SoundRow: View {
 
 // MARK: - Loaders
 
-/// Tile grid of every loader in the library; click to choose.
+/// Tile grid of every working orb; click to choose.
 private struct LoaderGallery: View {
     @Binding var selection: LoaderStyle
 
@@ -450,7 +450,7 @@ private struct LoaderTile: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 0) {
-                LoaderView(style: style, size: 22, color: .white)
+                Orb(look: OrbLook(style), size: 26, color: StatusPresentation.Tint.accent.color)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 Text(style.displayName)
                     .font(.system(size: 10.5, weight: .medium))
@@ -496,7 +496,7 @@ private struct AgentLoaderRow: View {
                 .foregroundStyle(.white.opacity(0.9))
                 .lineLimit(1)
             Spacer(minLength: 6)
-            LoaderView(style: settings.loader.style(for: agent.id), size: 14)
+            Orb(look: OrbLook(settings.loader.style(for: agent.id)), size: 18, color: StatusPresentation.Tint.accent.color)
             Picker("Loader for \(agent.name)", selection: choice) {
                 Text("Global (\(settings.loader.global.displayName))").tag(LoaderStyle?.none)
                 Divider()

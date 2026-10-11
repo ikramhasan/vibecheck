@@ -9,6 +9,7 @@ let package = Package(
         .target(name: "CompanionCore"),
         // The macOS app: edge panel window + SwiftUI views.
         .executableTarget(name: "AgentCompanion", dependencies: ["CompanionCore"],
+                          exclude: ["Orbs/LICENSE"],
                           resources: [.copy("Resources/ProviderIcons")]),
         .testTarget(name: "CompanionCoreTests", dependencies: ["CompanionCore"], resources: [.copy("Fixtures")]),
     ]

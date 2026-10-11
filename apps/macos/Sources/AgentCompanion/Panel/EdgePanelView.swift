@@ -122,8 +122,7 @@ struct EdgePanelView: View {
 
 // MARK: - Collapsed
 
-/// One project badge per session (most urgent first). The outline carries status;
-/// the agent rides as a corner badge.
+/// One status orb per session (most urgent first); the agent rides as a corner badge.
 private struct CollapsedContent: View {
     let sessions: [AgentSession]
     let groups: [SessionGroup]
@@ -168,62 +167,15 @@ private struct SessionBadge: View {
     let session: AgentSession
 
     var body: some View {
-        let size = PanelMetrics.badgeSize
-        ZStack {
-            ProjectBadge(project: project, size: size - 6)
-            StatusOutline(session: session, size: size)
-        }
-        .frame(width: size, height: size)
-        .overlay(alignment: .bottomTrailing) {
-            AgentGlyph(agentID: session.agent.id, size: 8)
-                .frame(width: 13, height: 13)
-                .background(Circle().fill(Color(white: 0.11)))
-                .overlay(Circle().strokeBorder(Color(white: 0.055), lineWidth: 1.5))
-                .offset(x: 4, y: 4)
-        }
-        .help("\(session.agent.name) · \(project.name)")
-    }
-}
-
-/// Rounded-square outline around a project badge: spinning arc while working,
-/// breathing for attention, steady otherwise. Color and motion come from `StatusPresentation`.
-private struct StatusOutline: View {
-    let session: AgentSession
-    let size: CGFloat
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        let shape = RoundedRectangle(cornerRadius: size * 0.31, style: .continuous)
-        let presentation = StatusPresentation(session)
-        let color = presentation.tint.color
-        switch presentation.motion {
-        case .travel:
-            ZStack {
-                shape.strokeBorder(Color.white.opacity(0.1), lineWidth: 1.6)
-                // The arc travels along the outline (the square itself never rotates).
-                TimelineView(.animation(paused: reduceMotion)) { context in
-                    let t = context.date.timeIntervalSinceReferenceDate
-                    let start = reduceMotion ? 0 : (t / 1.2).truncatingRemainder(dividingBy: 1)
-                    let end = start + 0.28
-                    let arc = StrokeStyle(lineWidth: 1.6, lineCap: .round)
-                    ZStack {
-                        shape.inset(by: 0.8).trim(from: start, to: min(end, 1))
-                            .stroke(color, style: arc)
-                        if end > 1 {
-                            shape.inset(by: 0.8).trim(from: 0, to: end - 1)
-                                .stroke(color, style: arc)
-                        }
-                    }
-                }
+        StatusIndicator(session: session, size: PanelMetrics.badgeSize)
+            .overlay(alignment: .bottomTrailing) {
+                AgentGlyph(agentID: session.agent.id, size: 8)
+                    .frame(width: 13, height: 13)
+                    .background(Circle().fill(Color(white: 0.11)))
+                    .overlay(Circle().strokeBorder(Color(white: 0.055), lineWidth: 1.5))
+                    .offset(x: 4, y: 4)
             }
-        case .pulse:
-            TimelineView(.animation(paused: reduceMotion)) { context in
-                let pulse = reduceMotion ? 1 : (sin(context.date.timeIntervalSinceReferenceDate * 4) + 1) / 2
-                shape.strokeBorder(color.opacity(0.45 + 0.55 * pulse), lineWidth: 1.6)
-            }
-        case .still:
-            shape.strokeBorder(color.opacity(0.75), lineWidth: 1.6)
-        }
+            .help("\(session.agent.name) · \(project.name)")
     }
 }
 
@@ -231,37 +183,19 @@ struct StatusIndicator: View {
     let session: AgentSession
     var size: CGFloat = 16
     @Environment(AppSettings.self) private var settings
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let presentation = StatusPresentation(session)
-        let color = presentation.tint.color
-        switch session.status {
-        case .working:
-            LoaderView(style: settings.loader.style(for: session.agent.id), size: size)
-        case .needsAttention:
-            TimelineView(.animation(paused: reduceMotion)) { context in
-                let t = context.date.timeIntervalSinceReferenceDate
-                let pulse = reduceMotion ? 0 : (sin(t * 4) + 1) / 2
-                ZStack {
-                    Circle().fill(color.opacity(0.25 * (1 - pulse)))
-                        .scaleEffect(0.6 + 0.4 * pulse)
-                    Circle().fill(color).frame(width: size * 0.55, height: size * 0.55)
-                }
-            }
-            .frame(width: size, height: size)
-        case .idle:
-            Image(systemName: session.wasInterrupted ? "stop.circle.fill" : "checkmark.circle.fill")
-                .font(.system(size: size))
-                .foregroundStyle(color)
-        case .blocked:
-            Image(systemName: "hourglass.circle.fill")
-                .font(.system(size: size))
-                .foregroundStyle(color)
-        case .error:
-            Image(systemName: "exclamationmark.circle.fill")
-                .font(.system(size: size))
-                .foregroundStyle(color)
+        Orb(look: look(presentation.orb), size: size, color: presentation.tint.color,
+            animated: presentation.orb != .resting)
+    }
+
+    private func look(_ orb: StatusPresentation.Orb) -> OrbLook {
+        switch orb {
+        case .working: OrbLook(settings.loader.style(for: session.agent.id))
+        case .waiting: .waiting
+        case .retrying: .retrying
+        case .resting: .base
         }
     }
 }
@@ -269,10 +203,11 @@ struct StatusIndicator: View {
 extension StatusPresentation.Tint {
     var color: Color {
         switch self {
-        case .accent: LoaderPalette.accent
+        case .accent: Color(red: 0.32, green: 0.56, blue: 1.0)
         case .attention: .orange
         case .success: .green
         case .muted: Color(white: 0.6)
+        case .limited: Color(red: 1, green: 0.84, blue: 0.3)
         case .failure: Color(red: 1, green: 0.42, blue: 0.4)
         }
     }
@@ -478,8 +413,7 @@ private struct SessionLine: View {
             HStack(spacing: 8) {
                 // Same width as the project icon above, so the columns line up:
                 // status under the icon, agent under the project name.
-                StatusIndicator(session: session, size: 11)
-                    .frame(width: 18)
+                StatusIndicator(session: session, size: 18)
                 AgentGlyph(agentID: session.agent.id, size: 12)
                 Text(StatusPresentation.headline(session))
                     .font(.system(size: 12))

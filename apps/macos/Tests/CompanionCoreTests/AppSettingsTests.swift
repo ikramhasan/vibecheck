@@ -4,26 +4,26 @@ import Testing
 
 @Suite struct LoaderSettingsTests {
     @Test func agentFallsBackToGlobal() {
-        var s = LoaderSettings(global: .classic)
-        #expect(s.style(for: "pi") == .classic)
-        s.setOverride(.ring, for: "pi")
-        #expect(s.style(for: "pi") == .ring)
-        #expect(s.style(for: "claude") == .classic)
+        var s = LoaderSettings(global: .gyro)
+        #expect(s.style(for: "pi") == .gyro)
+        s.setOverride(.spiral, for: "pi")
+        #expect(s.style(for: "pi") == .spiral)
+        #expect(s.style(for: "claude") == .gyro)
         s.setOverride(nil, for: "pi")
-        #expect(s.style(for: "pi") == .classic)
+        #expect(s.style(for: "pi") == .gyro)
     }
 
     @Test func roundTripsThroughJSON() throws {
-        let s = LoaderSettings(global: .classic, perAgent: ["pi": .ring])
+        let s = LoaderSettings(global: .gyro, perAgent: ["pi": .spiral])
         let decoded = try JSONDecoder().decode(LoaderSettings.self, from: JSONEncoder().encode(s))
         #expect(decoded == s)
     }
 
     @Test func unknownStylesAreDroppedNotFatal() throws {
-        let json = #"{"global":"nope","perAgent":{"pi":"classic","claude":"gone"}}"#
+        let json = #"{"global":"nope","perAgent":{"pi":"gyro","claude":"gone"}}"#
         let s = try JSONDecoder().decode(LoaderSettings.self, from: Data(json.utf8))
-        #expect(s.global == .ring)
-        #expect(s.perAgent == ["pi": .classic])
+        #expect(s.global == .working)
+        #expect(s.perAgent == ["pi": .gyro])
     }
 }
 
@@ -36,11 +36,11 @@ import Testing
 
         let first = AppSettings(defaults: defaults)
         #expect(first.loader == LoaderSettings())
-        first.loader.global = .classic
-        first.loader.setOverride(.ring, for: "claude")
+        first.loader.global = .gyro
+        first.loader.setOverride(.spiral, for: "claude")
 
         let second = AppSettings(defaults: defaults)
-        #expect(second.loader.global == .classic)
-        #expect(second.loader.style(for: "claude") == .ring)
+        #expect(second.loader.global == .gyro)
+        #expect(second.loader.style(for: "claude") == .spiral)
     }
 }
