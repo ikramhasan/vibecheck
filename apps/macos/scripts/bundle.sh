@@ -11,6 +11,7 @@ APP="build/vibecheck.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Helpers" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Vibecheck"
+cp Icon/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 # SwiftPM resources (provider icons).
 cp -R "$(dirname "$BIN")/Vibecheck_Vibecheck.bundle" "$APP/Contents/Resources/"
 # CodexBar CLI finds its resource bundle next to itself, so they travel together.
@@ -26,6 +27,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleDisplayName</key><string>vibecheck</string>
   <key>CFBundleIdentifier</key><string>com.ikramulhasan.vibecheck</string>
   <key>CFBundleExecutable</key><string>Vibecheck</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>0.3.0</string>
   <key>CFBundleVersion</key><string>3</string>
