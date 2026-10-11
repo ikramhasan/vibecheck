@@ -64,7 +64,13 @@ enum DemoData {
                          updatedAt: now.addingTimeInterval(-240)),
             AgentSession(agent: .init(id: "claude", name: "Claude"), sessionID: "demo-2", cwd: web,
                          status: .needsAttention, task: "Migrate auth middleware to edge runtime",
-                         attention: .init(kind: .permission, message: "Allow edit to config.prod.yml?"),
+                         attention: .init(kind: .question, message: "Which runtime should the middleware target?", questions: [
+                             .init(header: "Runtime", question: "Which runtime should the middleware target?", options: [
+                                 .init(label: "Edge (Recommended)", description: "Runs close to users; needs the Web Crypto API instead of node:crypto."),
+                                 .init(label: "Node.js", description: "Keeps the current crypto code, but adds a cold start on every request."),
+                                 .init(label: "Both", description: "Edge for auth checks, Node.js for token refresh."),
+                             ]),
+                         ]),
                          startedAt: now.addingTimeInterval(-900), updatedAt: now.addingTimeInterval(-60)),
             AgentSession(agent: .init(id: "codex", name: "Codex"), sessionID: "demo-3", cwd: web,
                          status: .working, task: "Add Stripe checkout to pricing page", activity: "Running npm test",

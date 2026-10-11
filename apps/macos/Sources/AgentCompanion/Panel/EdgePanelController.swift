@@ -145,6 +145,7 @@ final class EdgePanelController {
         let root = EdgePanelView(store: store, usage: usage, state: state,
                                  onOpenSettings: { [weak self] in self?.showPage(.settings) },
                                  onCloseSettings: { [weak self] in self?.showPage(.sessions) },
+                                 onShowAll: { [weak self] in self?.showAllSessions() },
                                  onQuit: { NSApp.terminate(nil) })
             .environment(settings)
         let hosting = FirstClickHostingView(rootView: root)
@@ -216,6 +217,11 @@ final class EdgePanelController {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
     }
 
+    private func showAllSessions() {
+        presentation.acknowledgeAttention()
+        apply(attentionArrived: false)
+    }
+
     // MARK: - Sessions
 
     private func sessionsChanged(_ sessions: [AgentSession]) {
@@ -245,9 +251,10 @@ final class EdgePanelController {
     }
 
     private var targetHeight: CGFloat {
-        state.page == .settings
-            ? PanelMetrics.settingsHeight
-            : PanelMetrics.expandedHeight(groups: ProjectIcons.shared.groups(store.sessions), usage: usage.usage)
+        if state.page == .settings { return PanelMetrics.settingsHeight }
+        let asking = store.sessions.filter { state.pendingAttentionIDs.contains($0.id) }
+        if !asking.isEmpty { return QuestionMetrics.pageHeight(asking) }
+        return PanelMetrics.expandedHeight(groups: ProjectIcons.shared.groups(store.sessions), usage: usage.usage)
     }
 
     // MARK: - Layout
@@ -326,7 +333,10 @@ final class EdgePanelController {
         let pendingIDs = Set(store.sessions.filter {
             $0.attentionKey.map(presentation.pendingAttention.contains) ?? false
         }.map(\.id))
-        state.pendingAttentionIDs = pendingIDs
+        if pendingIDs != state.pendingAttentionIDs {
+            state.pendingAttentionIDs = pendingIDs
+            contentChanged()
+        }
 
         guard target != state.mode else {
             if attentionArrived { NSSound(named: "Tink")?.play() }

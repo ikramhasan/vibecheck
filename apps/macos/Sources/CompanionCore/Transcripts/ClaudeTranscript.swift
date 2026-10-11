@@ -91,7 +91,8 @@ public enum ClaudeTranscript {
         guard let id = TranscriptText.string(block["id"]), let name = TranscriptText.string(block["name"]) else { return nil }
         let input = block["input"] as? [String: Any] ?? [:]
         let (kind, subject) = classify(name, input)
-        return ToolCall(id: id, name: name, kind: kind, subject: subject)
+        return ToolCall(id: id, name: name, kind: kind, subject: subject,
+                            questions: kind == .question ? TranscriptText.questions(input) : [])
     }
 
     static func classify(_ name: String, _ input: [String: Any]) -> (ToolCall.Kind, String?) {

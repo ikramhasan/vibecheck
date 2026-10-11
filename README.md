@@ -64,8 +64,9 @@ pi install "$PWD/integrations/pi"     # uninstall: pi remove "$PWD/integrations/
 
 - No live sessions: hidden.
 - Sessions running: small tab on the right edge; hover to expand.
-- A session needs attention (question, permission, input): expands by itself and
-  stays open until you've hovered over it. A new request re-opens it.
+- A session needs attention (question, permission, input): expands by itself and shows
+  only the pending questions, with their options, until you've hovered over it or
+  clicked "Show all". A new request re-opens it.
 - Clicking a session selects its exact tab in Terminal or iTerm2 (and its tmux pane);
   other apps are brought forward.
 

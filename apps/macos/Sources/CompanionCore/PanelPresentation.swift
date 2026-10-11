@@ -52,6 +52,11 @@ public struct PanelPresentation: Equatable, Sendable {
         recompute()
     }
 
+    public mutating func acknowledgeAttention() {
+        acknowledged.formUnion(attentionKeys)
+        recompute()
+    }
+
     public mutating func setPinned(_ value: Bool) {
         guard value != pinned else { return }
         pinned = value

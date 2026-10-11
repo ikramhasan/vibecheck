@@ -64,7 +64,8 @@ public enum CodexTranscript {
             guard let id = TranscriptText.string(payload["call_id"]), let name = TranscriptText.string(payload["name"]) else { return [] }
             let input = TranscriptText.jsonObject(string: payload["arguments"] as? String) ?? [:]
             let (kind, subject) = classify(name, input)
-            return [.toolCall(ToolCall(id: id, name: name, kind: kind, subject: subject))]
+            return [.toolCall(ToolCall(id: id, name: name, kind: kind, subject: subject,
+                            questions: kind == .question ? TranscriptText.questions(input) : []))]
         case "function_call_output", "custom_tool_call_output":
             return TranscriptText.string(payload["call_id"]).map { [.toolResult(id: $0)] } ?? []
         default:

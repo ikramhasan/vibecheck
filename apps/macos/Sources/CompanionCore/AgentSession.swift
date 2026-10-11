@@ -15,10 +15,54 @@ public struct AgentSession: Identifiable, Hashable, Sendable {
         public enum Kind: String, Codable, Sendable { case question, permission, input, other }
         public var kind: Kind
         public var message: String
+        public var questions: [Question]
 
-        public init(kind: Kind, message: String) {
+        public init(kind: Kind, message: String, questions: [Question] = []) {
             self.kind = kind
             self.message = message
+            self.questions = questions
+        }
+
+        private enum CodingKeys: String, CodingKey { case kind, message, questions }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            self.init(kind: try c.decode(Kind.self, forKey: .kind), message: try c.decode(String.self, forKey: .message),
+                      questions: (try? c.decodeIfPresent([Question].self, forKey: .questions)) ?? [])
+        }
+    }
+
+    public struct Question: Hashable, Codable, Sendable {
+        public struct Option: Hashable, Codable, Sendable {
+            public var label: String
+            public var description: String?
+
+            public init(label: String, description: String? = nil) {
+                self.label = label
+                self.description = description
+            }
+        }
+
+        public var header: String?
+        public var question: String
+        public var options: [Option]
+        public var multiSelect: Bool
+
+        public init(header: String? = nil, question: String, options: [Option] = [], multiSelect: Bool = false) {
+            self.header = header
+            self.question = question
+            self.options = options
+            self.multiSelect = multiSelect
+        }
+
+        private enum CodingKeys: String, CodingKey { case header, question, options, multiSelect }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            self.init(header: try? c.decodeIfPresent(String.self, forKey: .header),
+                      question: try c.decode(String.self, forKey: .question),
+                      options: (try? c.decodeIfPresent([Option].self, forKey: .options)) ?? [],
+                      multiSelect: (try? c.decodeIfPresent(Bool.self, forKey: .multiSelect)) ?? false)
         }
     }
 

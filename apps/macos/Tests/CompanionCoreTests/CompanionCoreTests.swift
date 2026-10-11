@@ -50,6 +50,17 @@ private func session(_ id: String, _ status: AgentSession.Status, message: Strin
         #expect(p.mode == .collapsed)
     }
 
+    @Test func showAllWhileHoveringKeepsPanelOpen() {
+        var p = PanelPresentation()
+        p.update(sessions: [session("a", .needsAttention, message: "Q1")])
+        p.setHovering(true)
+        p.acknowledgeAttention()
+        #expect(p.pendingAttention.isEmpty)
+        #expect(p.mode == .expanded)
+        p.setHovering(false)
+        #expect(p.mode == .collapsed)
+    }
+
     @Test func newRequestReopens() {
         var p = PanelPresentation()
         p.update(sessions: [session("a", .needsAttention, message: "Q1")])

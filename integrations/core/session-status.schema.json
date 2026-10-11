@@ -48,7 +48,28 @@
       "required": ["kind", "message"],
       "properties": {
         "kind": { "enum": ["question", "permission", "input", "other"] },
-        "message": { "type": "string" }
+        "message": { "type": "string" },
+        "questions": {
+          "type": "array",
+          "description": "Optional structured questions, shown with their options when the panel opens.",
+          "items": {
+            "type": "object",
+            "required": ["question"],
+            "properties": {
+              "header": { "type": "string" },
+              "question": { "type": "string" },
+              "multiSelect": { "type": "boolean" },
+              "options": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["label"],
+                  "properties": { "label": { "type": "string" }, "description": { "type": "string" } }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "startedAt": { "type": "string", "format": "date-time" },

@@ -25,12 +25,14 @@ public struct ToolCall: Equatable, Sendable {
     public var name: String
     public var kind: Kind
     public var subject: String?
+    public var questions: [AgentSession.Question]
 
-    public init(id: String, name: String, kind: Kind, subject: String? = nil) {
+    public init(id: String, name: String, kind: Kind, subject: String? = nil, questions: [AgentSession.Question] = []) {
         self.id = id
         self.name = name
         self.kind = kind
         self.subject = subject
+        self.questions = questions
     }
 }
 
@@ -58,5 +60,16 @@ enum TranscriptText {
 
     static func firstString(_ input: [String: Any], _ keys: [String]) -> String? {
         keys.lazy.compactMap { string(input[$0]) }.first
+    }
+
+    static func questions(_ input: [String: Any]) -> [AgentSession.Question] {
+        (input["questions"] as? [[String: Any]] ?? []).compactMap { item in
+            guard let text = string(item["question"]) else { return nil }
+            let options = (item["options"] as? [[String: Any]] ?? []).compactMap { option in
+                string(option["label"]).map { AgentSession.Question.Option(label: $0, description: string(option["description"])) }
+            }
+            return AgentSession.Question(header: string(item["header"]), question: text, options: options,
+                                         multiSelect: item["multiSelect"] as? Bool ?? false)
+        }
     }
 }

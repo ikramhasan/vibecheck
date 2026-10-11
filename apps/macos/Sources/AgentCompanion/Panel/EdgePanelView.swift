@@ -32,6 +32,7 @@ struct EdgePanelView: View {
     let state: PanelState
     let onOpenSettings: () -> Void
     let onCloseSettings: () -> Void
+    let onShowAll: () -> Void
     let onQuit: () -> Void
     @Environment(AppSettings.self) private var settings
 
@@ -40,6 +41,8 @@ struct EdgePanelView: View {
     private var count: Int { store.sessions.count }
     private var onSettings: Bool { state.page == .settings }
     private var groups: [SessionGroup] { ProjectIcons.shared.groups(store.sessions) }
+    private var asking: [AgentSession] { store.sessions.filter { state.pendingAttentionIDs.contains($0.id) } }
+    private var showsQuestions: Bool { !onSettings && !asking.isEmpty }
 
     var body: some View {
         let groups = groups
@@ -61,13 +64,19 @@ struct EdgePanelView: View {
             ZStack(alignment: .top) {
                 ExpandedContent(groups: groups, sessionCount: count, usage: usage.usage,
                                 pendingIDs: state.pendingAttentionIDs,
-                                isShown: expanded && !onSettings,
+                                isShown: expanded && !onSettings && !showsQuestions,
                                 hiddenSide: onSettings ? .leading : .trailing,
                                 paced: state.pageChanging,
                                 onOpenSettings: onOpenSettings, onQuit: onQuit)
                     .frame(height: PanelMetrics.expandedHeight(groups: groups, usage: usage.usage), alignment: .top)
-                    .allowsHitTesting(!onSettings)
-                    .accessibilityHidden(onSettings)
+                    .opacity(showsQuestions ? 0 : 1)
+                    .allowsHitTesting(!onSettings && !showsQuestions)
+                    .accessibilityHidden(onSettings || showsQuestions)
+
+                QuestionPage(sessions: asking, isShown: expanded && showsQuestions, onShowAll: onShowAll)
+                    .frame(height: QuestionMetrics.pageHeight(asking), alignment: .top)
+                    .allowsHitTesting(showsQuestions)
+                    .accessibilityHidden(!showsQuestions)
 
                 SettingsPage(settings: settings, store: store, usage: usage,
                              isShown: expanded && onSettings, paced: state.pageChanging,
@@ -100,7 +109,9 @@ struct EdgePanelView: View {
     }
 
     private func pageHeight(_ groups: [SessionGroup]) -> CGFloat {
-        onSettings ? PanelMetrics.settingsHeight : PanelMetrics.expandedHeight(groups: groups, usage: usage.usage)
+        if onSettings { return PanelMetrics.settingsHeight }
+        if showsQuestions { return QuestionMetrics.pageHeight(asking) }
+        return PanelMetrics.expandedHeight(groups: groups, usage: usage.usage)
     }
 }
 

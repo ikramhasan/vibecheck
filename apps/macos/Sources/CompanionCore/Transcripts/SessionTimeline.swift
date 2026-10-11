@@ -97,7 +97,7 @@ public struct SessionTimeline: Equatable, Sendable {
         activity = Self.describe(call)
         if call.kind == .question {
             status = .needsAttention
-            attention = .init(kind: .question, message: call.subject ?? "Waiting for your answer")
+            attention = .init(kind: .question, message: call.subject ?? "Waiting for your answer", questions: call.questions)
         } else {
             status = .working
             attention = nil

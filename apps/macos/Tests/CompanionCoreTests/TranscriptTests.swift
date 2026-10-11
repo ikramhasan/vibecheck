@@ -35,7 +35,12 @@ private func timeline(_ path: String, _ format: TranscriptFormat) throws -> Sess
     @Test func questionToolNeedsAttention() throws {
         let t = try timeline("claude/asking.jsonl", .claude)
         #expect(t.status == .needsAttention)
-        #expect(t.attention == .init(kind: .question, message: "Which database should we use?"))
+        #expect(t.attention == .init(kind: .question, message: "Which database should we use?", questions: [
+            .init(header: "DB", question: "Which database should we use?", options: [
+                .init(label: "Postgres (Recommended)", description: "Relational, matches the existing schema."),
+                .init(label: "SQLite", description: "Single file, no server."),
+            ]),
+        ]))
     }
 
     @Test func interruptGoesIdleWithoutFinishing() throws {
@@ -83,6 +88,9 @@ private func timeline(_ path: String, _ format: TranscriptFormat) throws -> Sess
         let t = try timeline("codex/question.jsonl", .codex)
         #expect(t.status == .needsAttention)
         #expect(t.attention?.message == "How should v1 execute Python?")
+        #expect(t.attention?.questions == [.init(header: "Python Run", question: "How should v1 execute Python?", options: [
+            .init(label: "Browser-only", description: "Pyodide in the browser."), .init(label: "Server-backed"),
+        ])])
     }
 
     @Test func abortedTurnIsInterrupted() throws {
