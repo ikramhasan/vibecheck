@@ -124,10 +124,13 @@ final class FirstClickHostingView<Content: View>: NSHostingView<Content> {
 final class EdgePanelController {
     private let store: SessionStore
     private let usage: UsageStore
+    private let settings: AppSettings
     private let state = PanelState()
     private let panel: EdgePanel
     private var presentation = PanelPresentation()
     private var hoverTimer: Timer?
+    private var removalTimer: Timer?
+    private var pointerInside = false
     private var shrinkWork: DispatchWorkItem?
     private var hideWork: DispatchWorkItem?
     private var pageSettleWork: DispatchWorkItem?
@@ -141,6 +144,7 @@ final class EdgePanelController {
     init(store: SessionStore, usage: UsageStore, settings: AppSettings) {
         self.store = store
         self.usage = usage
+        self.settings = settings
         panel = EdgePanel(contentRect: .zero)
 
         let root = EdgePanelView(store: store, usage: usage, state: state,
@@ -148,6 +152,7 @@ final class EdgePanelController {
                                  onCloseSettings: { [weak self] in self?.showPage(.sessions) },
                                  onShowAll: { [weak self] in self?.showAllSessions() },
                                  onClearCompleted: { [weak self] in self?.clearCompleted() },
+                                 onDismiss: { [weak self] in self?.dismiss($0) },
                                  onQuit: { NSApp.terminate(nil) })
             .environment(settings)
         let hosting = FirstClickHostingView(rootView: root)
@@ -187,6 +192,7 @@ final class EdgePanelController {
         reposition()
         panel.ignoresMouseEvents = true
         startHoverTracking()
+        startRemovalTimer()
         sessionsChanged(store.sessions)
     }
 
@@ -221,6 +227,27 @@ final class EdgePanelController {
 
     private func clearCompleted() {
         withAnimation(.spring(response: 0.4, dampingFraction: 0.86)) { state.completed.clear(store.sessions) }
+        sessionsChanged(store.sessions)
+    }
+
+    private func dismiss(_ session: AgentSession) {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.86)) { state.completed.dismiss(session) }
+        sessionsChanged(store.sessions)
+    }
+
+    private func startRemovalTimer() {
+        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.removeFinishedSessions() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        removalTimer = timer
+    }
+
+    private func removeFinishedSessions() {
+        guard !pointerInside, let delay = settings.finishedSessionRemoval.delay else { return }
+        var completed = state.completed
+        guard completed.clear(store.sessions, finishedBefore: Date.now.addingTimeInterval(-delay)) else { return }
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.86)) { state.completed = completed }
         sessionsChanged(store.sessions)
     }
 
@@ -328,6 +355,7 @@ final class EdgePanelController {
     }
 
     private func setHovering(_ hovering: Bool) {
+        pointerInside = hovering
         let before = presentation
         presentation.setHovering(hovering)
         guard presentation != before else { return }

@@ -78,7 +78,7 @@ enum DemoData {
                          startedAt: now.addingTimeInterval(-1200), updatedAt: now.addingTimeInterval(-540)),
             AgentSession(agent: .init(id: "cursor", name: "Cursor"), sessionID: "demo-4", cwd: cli,
                          status: .idle, task: "Fix flaky snapshot test", activity: "Done · 3 files changed",
-                         startedAt: now.addingTimeInterval(-2400), updatedAt: now.addingTimeInterval(-720)),
+                         startedAt: now.addingTimeInterval(-2400), updatedAt: now.addingTimeInterval(-90)),
         ]
     }()
 }

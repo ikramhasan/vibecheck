@@ -27,12 +27,32 @@ struct SettingsPage: View {
                     }
                     .cascade(shown: isShown, index: 1, side: .trailing, paced: paced)
 
+                    SettingsSection("Sessions",
+                                    footer: "Finished sessions leave the panel after this long. They come back "
+                                        + "when the agent starts working again.") {
+                        HStack {
+                            Text("Remove finished sessions")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.white.opacity(0.9))
+                            Spacer(minLength: 6)
+                            Picker("Remove finished sessions", selection: $settings.finishedSessionRemoval) {
+                                ForEach(FinishedSessionRemoval.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                            .controlSize(.small)
+                            .fixedSize()
+                        }
+                        .frame(height: 30)
+                    }
+                    .cascade(shown: isShown, index: 2, side: .trailing, paced: paced)
+
                     SettingsSection("Loading indicator",
                                     footer: "Shown while an agent is working. Agents without an override use this.",
                                     grouped: false) {
                         LoaderGallery(selection: $settings.loader.global)
                     }
-                    .cascade(shown: isShown, index: 2, side: .trailing, paced: paced)
+                    .cascade(shown: isShown, index: 3, side: .trailing, paced: paced)
 
                     if !agents.isEmpty {
                         SettingsSection("Per agent") {
@@ -43,7 +63,7 @@ struct SettingsPage: View {
                                 }
                             }
                         }
-                        .cascade(shown: isShown, index: 3, side: .trailing, paced: paced)
+                        .cascade(shown: isShown, index: 4, side: .trailing, paced: paced)
                     }
                 }
                 .padding(.horizontal, 14)

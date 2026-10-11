@@ -53,3 +53,43 @@ import Testing
         #expect(p.mode == .collapsed)
     }
 }
+
+@Suite struct CompletedRemovalTests {
+    private func session(_ id: String, _ status: AgentSession.Status, since: TimeInterval) -> AgentSession {
+        var s = AgentSession(agent: .init(id: "claude", name: "Claude"), sessionID: id, cwd: "/", status: status)
+        s.statusSince = Date(timeIntervalSince1970: since)
+        return s
+    }
+
+    @Test func dismissHidesOneCompletedSession() {
+        var filter = CompletedFilter()
+        let done = session("a", .idle, since: 1)
+        let other = session("b", .idle, since: 1)
+        let busy = session("c", .working, since: 1)
+        filter.dismiss(done)
+        filter.dismiss(busy)
+        #expect(filter.visible([done, other, busy]).map(\.sessionID) == ["b", "c"])
+    }
+
+    @Test func autoClearsOnlySessionsFinishedLongEnoughAgo() {
+        var filter = CompletedFilter()
+        let old = session("old", .idle, since: 100)
+        let recent = session("recent", .idle, since: 290)
+        let busy = session("busy", .working, since: 0)
+        let cutoff = Date(timeIntervalSince1970: 200)
+        let first = filter.clear([old, recent, busy], finishedBefore: cutoff)
+        #expect(first)
+        #expect(filter.visible([old, recent, busy]).map(\.sessionID) == ["recent", "busy"])
+        let again = filter.clear([old, recent, busy], finishedBefore: cutoff)
+        #expect(!again)
+    }
+
+    @MainActor @Test func removalChoicesPersist() {
+        let defaults = UserDefaults(suiteName: UUID().uuidString)!
+        #expect(AppSettings(defaults: defaults).finishedSessionRemoval == .minutes5)
+        AppSettings(defaults: defaults).finishedSessionRemoval = .never
+        #expect(AppSettings(defaults: defaults).finishedSessionRemoval == .never)
+        #expect(FinishedSessionRemoval.instant.delay == 0)
+        #expect(FinishedSessionRemoval.never.delay == nil)
+    }
+}

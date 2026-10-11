@@ -27,6 +27,18 @@ public struct CompletedFilter: Equatable, Sendable {
         }
     }
 
+    public mutating func dismiss(_ session: AgentSession) {
+        guard Self.isCompleted(session) else { return }
+        cleared[session.id] = Self.since(session)
+    }
+
+    @discardableResult
+    public mutating func clear(_ sessions: [AgentSession], finishedBefore cutoff: Date) -> Bool {
+        let due = sessions.filter { Self.isCompleted($0) && !isCleared($0) && Self.since($0) <= cutoff }
+        due.forEach { cleared[$0.id] = Self.since($0) }
+        return !due.isEmpty
+    }
+
     public mutating func forgetResumed(_ sessions: [AgentSession]) {
         let stillCleared = Set(sessions.filter(isCleared).map(\.id))
         cleared = cleared.filter { stillCleared.contains($0.key) }

@@ -109,6 +109,40 @@ public struct AgentPreferences: Equatable, Codable, Sendable {
     }
 }
 
+public enum FinishedSessionRemoval: String, CaseIterable, Codable, Sendable {
+    case instant, seconds30, minute1, minutes5, minutes10, minutes30, hour1, day1, never
+
+    public static let `default` = FinishedSessionRemoval.minutes5
+
+    public var delay: TimeInterval? {
+        switch self {
+        case .instant: 0
+        case .seconds30: 30
+        case .minute1: 60
+        case .minutes5: 5 * 60
+        case .minutes10: 10 * 60
+        case .minutes30: 30 * 60
+        case .hour1: 60 * 60
+        case .day1: 24 * 60 * 60
+        case .never: nil
+        }
+    }
+
+    public var displayName: String {
+        switch self {
+        case .instant: "Instantly"
+        case .seconds30: "After 30 seconds"
+        case .minute1: "After 1 minute"
+        case .minutes5: "After 5 minutes"
+        case .minutes10: "After 10 minutes"
+        case .minutes30: "After 30 minutes"
+        case .hour1: "After 1 hour"
+        case .day1: "After 1 day"
+        case .never: "Never"
+        }
+    }
+}
+
 /// User preferences, persisted to UserDefaults. Grows a property per setting group.
 @MainActor
 @Observable
@@ -121,17 +155,24 @@ public final class AppSettings {
         didSet { if agents != oldValue { save(agents, key: Keys.agents) } }
     }
 
+    public var finishedSessionRemoval: FinishedSessionRemoval {
+        didSet { if finishedSessionRemoval != oldValue { defaults.set(finishedSessionRemoval.rawValue, forKey: Keys.finishedSessionRemoval) } }
+    }
+
     @ObservationIgnored private let defaults: UserDefaults
 
     private enum Keys {
         static let loader = "settings.loader"
         static let agents = "settings.agents"
+        static let finishedSessionRemoval = "settings.finishedSessionRemoval"
     }
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         loader = Self.load(LoaderSettings.self, key: Keys.loader, from: defaults) ?? LoaderSettings()
         agents = Self.load(AgentPreferences.self, key: Keys.agents, from: defaults) ?? AgentPreferences()
+        finishedSessionRemoval = defaults.string(forKey: Keys.finishedSessionRemoval)
+            .flatMap(FinishedSessionRemoval.init(rawValue:)) ?? .default
     }
 
     private func save<T: Encodable>(_ value: T, key: String) {

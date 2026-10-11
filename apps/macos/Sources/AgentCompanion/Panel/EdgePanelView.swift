@@ -34,6 +34,7 @@ struct EdgePanelView: View {
     let onCloseSettings: () -> Void
     let onShowAll: () -> Void
     let onClearCompleted: () -> Void
+    let onDismiss: (AgentSession) -> Void
     let onQuit: () -> Void
     @Environment(AppSettings.self) private var settings
 
@@ -70,7 +71,8 @@ struct EdgePanelView: View {
                                 isShown: expanded && !onSettings && !showsQuestions,
                                 hiddenSide: onSettings ? .leading : .trailing,
                                 paced: state.pageChanging,
-                                onOpenSettings: onOpenSettings, onClearCompleted: onClearCompleted, onQuit: onQuit)
+                                onOpenSettings: onOpenSettings, onClearCompleted: onClearCompleted,
+                                onDismiss: onDismiss, onQuit: onQuit)
                     .frame(height: PanelMetrics.expandedHeight(groups: groups, usage: usage.usage), alignment: .top)
                     .opacity(showsQuestions ? 0 : 1)
                     .allowsHitTesting(!onSettings && !showsQuestions)
@@ -291,6 +293,7 @@ private struct ExpandedContent: View {
     let paced: Bool
     let onOpenSettings: () -> Void
     let onClearCompleted: () -> Void
+    let onDismiss: (AgentSession) -> Void
     let onQuit: () -> Void
 
     var body: some View {
@@ -367,7 +370,7 @@ private struct ExpandedContent: View {
                         .padding(.horizontal, 18)
                         .frame(height: PanelMetrics.groupDivider)
                 }
-                ProjectGroupView(group: group, pendingIDs: pendingIDs)
+                ProjectGroupView(group: group, pendingIDs: pendingIDs, onDismiss: onDismiss)
                     .frame(height: PanelMetrics.groupHeight(group), alignment: .top)
                     // Small stagger so groups settle in after the card lands, and leave
                     // one by one when Settings takes over.
@@ -399,10 +402,31 @@ private struct HeaderButton: View {
     }
 }
 
+private struct DismissButton: View {
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.white.opacity(hovering ? 0.9 : 0.5))
+                .frame(width: 18, height: 18)
+                .background(Circle().fill(Color.white.opacity(hovering ? 0.14 : 0.08)))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .onHover { h in withAnimation(.easeOut(duration: 0.12)) { hovering = h } }
+        .help("Dismiss")
+        .accessibilityLabel("Dismiss")
+    }
+}
+
 /// Project header (icon, name, agent count) followed by one line per session.
 private struct ProjectGroupView: View {
     let group: SessionGroup
     let pendingIDs: Set<String>
+    let onDismiss: (AgentSession) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -426,7 +450,8 @@ private struct ProjectGroupView: View {
             .accessibilityAddTraits(.isHeader)
 
             ForEach(group.sessions) { session in
-                SessionLine(session: session, highlighted: pendingIDs.contains(session.id))
+                SessionLine(session: session, highlighted: pendingIDs.contains(session.id),
+                            onDismiss: { onDismiss(session) })
             }
         }
         .padding(.vertical, PanelMetrics.groupPadding / 2)
@@ -444,6 +469,7 @@ private struct ProjectGroupView: View {
 private struct SessionLine: View {
     let session: AgentSession
     let highlighted: Bool
+    let onDismiss: () -> Void
     @State private var hovering = false
     @State private var target: JumpTarget?
 
@@ -468,6 +494,10 @@ private struct SessionLine: View {
                     Text(elapsed(now: context.date))
                         .font(.system(size: 11).monospacedDigit())
                         .foregroundStyle(.white.opacity(0.38))
+                }
+                .opacity(dismissible ? 0 : 1)
+                .overlay(alignment: .trailing) {
+                    if dismissible { DismissButton(action: onDismiss) }
                 }
             }
             .frame(height: PanelMetrics.sessionLine)
@@ -500,7 +530,10 @@ private struct SessionLine: View {
         .accessibilityAddTraits(.isButton)
         .accessibilityHint(target.map { "Opens \($0.appName)" } ?? "Opens the app this session is running in")
         .accessibilityAction { SessionJumper.jump(to: session) }
+        .accessibilityAction(named: "Dismiss") { if CompletedFilter.isCompleted(session) { onDismiss() } }
     }
+
+    private var dismissible: Bool { hovering && CompletedFilter.isCompleted(session) }
 
     private var titleColor: Color {
         switch session.status {
