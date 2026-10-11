@@ -35,7 +35,7 @@ struct ServerList: View {
             if servers.isEmpty {
                 Text("No dev servers running")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.4))
+                    .foregroundStyle(.tertiary)
                     .frame(maxWidth: .infinity, minHeight: PanelMetrics.emptyListHeight)
                     .cascade(shown: shown, index: 1, side: side, paced: paced)
             }
@@ -69,11 +69,11 @@ private struct ServerRow: View {
                     .frame(width: 18)
                 Text(server.name)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.9))
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                 Text(server.address ?? server.framework.displayName)
                     .font(.system(size: 11).monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Spacer(minLength: 6)
                 trailing
@@ -86,7 +86,7 @@ private struct ServerRow: View {
                 }
                 Text(projectLabel)
                     .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.42))
+                    .foregroundStyle(.tertiary)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
@@ -95,10 +95,7 @@ private struct ServerRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 3)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(highlighted ? Color.orange.opacity(0.1) : Color.white.opacity(hovering ? 0.05 : 0))
-        )
+        .glassEffect(rowGlass, in: .rect(cornerRadius: 12, style: .continuous))
         .contentShape(Rectangle())
         .onHover { h in
             withAnimation(.easeOut(duration: 0.12)) {
@@ -124,26 +121,33 @@ private struct ServerRow: View {
         "\(server.summary), \(projectLabel)"
     }
 
+    private var rowGlass: Glass {
+        if highlighted { return .regular.tint(.orange.opacity(0.3)).interactive() }
+        return hovering ? .regular.interactive() : .identity
+    }
+
     @ViewBuilder private var trailing: some View {
         if hovering {
-            HStack(spacing: 2) {
-                if server.url != nil {
-                    RowAction(systemImage: copied ? "checkmark" : "doc.on.doc", label: "Copy URL", action: copy)
+            GlassEffectContainer(spacing: 4) {
+                HStack(spacing: 4) {
+                    if server.url != nil {
+                        RowAction(systemImage: copied ? "checkmark" : "doc.on.doc", label: "Copy URL", action: copy)
+                    }
+                    if revealPath != nil {
+                        RowAction(systemImage: "folder", label: server.appPath == nil ? "Reveal project in Finder"
+                                  : "Reveal app in Finder", action: reveal)
+                    }
+                    RowAction(systemImage: "arrow.up.right",
+                              label: server.url == nil ? "Bring to front" : "Open in browser", action: open)
+                    if server.canStop { stopButton }
                 }
-                if revealPath != nil {
-                    RowAction(systemImage: "folder", label: server.appPath == nil ? "Reveal project in Finder"
-                              : "Reveal app in Finder", action: reveal)
-                }
-                RowAction(systemImage: "arrow.up.right",
-                          label: server.url == nil ? "Bring to front" : "Open in browser", action: open)
-                if server.canStop { stopButton }
             }
             .transition(.opacity)
         } else {
             TimelineView(.periodic(from: .now, by: 30)) { context in
                 Text(ElapsedFormat.short(since: server.startedAt, now: context.date))
                     .font(.system(size: 11).monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.38))
+                    .foregroundStyle(.tertiary)
             }
             .transition(.opacity)
         }
@@ -158,12 +162,12 @@ private struct ServerRow: View {
                 Text("Stop")
                     .font(.system(size: 10.5, weight: .semibold))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 7)
-                    .frame(height: 18)
-                    .background(Capsule().fill(Color(red: 0.86, green: 0.27, blue: 0.25)))
+                    .padding(.horizontal, 8)
+                    .frame(height: 20)
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)
+            .glassEffect(.regular.tint(.red).interactive(), in: .capsule)
             .help(server.appPath == nil ? "Click again to stop this server" : "Click again to quit this app")
             .accessibilityLabel("Confirm stop")
             .transition(.scale(scale: 0.8).combined(with: .opacity))
@@ -226,12 +230,12 @@ private struct RowAction: View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 9.5, weight: .semibold))
-                .foregroundStyle(.white.opacity(hovering ? 0.9 : 0.5))
+                .foregroundStyle(hovering ? HierarchicalShapeStyle.primary : .secondary)
                 .frame(width: 20, height: 20)
-                .background(RoundedRectangle(cornerRadius: 5).fill(Color.white.opacity(hovering ? 0.1 : 0)))
-                .contentShape(Rectangle())
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: .circle)
         .onHover { h in withAnimation(.easeOut(duration: 0.12)) { hovering = h } }
         .help(label)
         .accessibilityLabel(label)

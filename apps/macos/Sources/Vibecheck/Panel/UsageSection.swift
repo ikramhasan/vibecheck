@@ -10,7 +10,7 @@ struct UsageSection: View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Usage")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.45))
+                .foregroundStyle(.tertiary)
                 .textCase(.uppercase)
                 .tracking(0.4)
                 .frame(maxWidth: .infinity, minHeight: PanelMetrics.usageHeaderHeight,
@@ -18,7 +18,7 @@ struct UsageSection: View {
                 .padding(.horizontal, 18)
                 // Full-width hairline, matching the dividers between project groups.
                 .overlay(alignment: .top) {
-                    Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1).padding(.horizontal, 18)
+                    Rectangle().fill(.separator).frame(height: 1).padding(.horizontal, 18)
                 }
 
             let content = VStack(alignment: .leading, spacing: PanelMetrics.usageProviderGap) {
@@ -47,14 +47,14 @@ private struct ProviderUsageView: View {
                 AgentGlyph(agentID: usage.id)
                 Text(usage.name)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.9))
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                 if let plan = shortPlan {
                     Text(plan)
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(.secondary)
                         .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(Capsule().fill(Color.white.opacity(0.07)))
+                        .background(Capsule().fill(.quinary))
                         .lineLimit(1)
                 }
                 Spacer(minLength: 4)
@@ -66,13 +66,13 @@ private struct ProviderUsageView: View {
 
             switch usage.state {
             case .loading where usage.windows.isEmpty:
-                message("Loading…", color: .white.opacity(0.4))
+                message("Loading…", color: Color.primary.opacity(0.4))
             case .failed(let error) where usage.windows.isEmpty:
-                message(error, color: Color(red: 1, green: 0.6, blue: 0.45).opacity(0.85))
+                message(error, color: .red)
                     .help(error)
             default:
                 if usage.windows.isEmpty {
-                    message("No quota reported", color: .white.opacity(0.4))
+                    message("No quota reported", color: Color.primary.opacity(0.4))
                 } else {
                     ForEach(usage.windows, id: \.label) { WindowRow(window: $0) }
                 }
@@ -107,7 +107,7 @@ private struct WindowRow: View {
         HStack(spacing: 8) {
             Text(window.label)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.white.opacity(0.55))
+                .foregroundStyle(.secondary)
                 .frame(width: 50, alignment: .leading)
                 .lineLimit(1)
 
@@ -116,13 +116,13 @@ private struct WindowRow: View {
 
             Text("\(Int(window.usedPercent.rounded()))%")
                 .font(.system(size: 11, weight: .medium).monospacedDigit())
-                .foregroundStyle(.white.opacity(0.85))
+                .foregroundStyle(.primary)
                 .frame(width: 34, alignment: .trailing)
 
             TimelineView(.periodic(from: .now, by: 60)) { context in
                 Text(window.resetsAt.map { ResetFormat.countdown(to: $0, now: context.date) } ?? "—")
                     .font(.system(size: 11).monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.4))
+                    .foregroundStyle(.tertiary)
             }
             .frame(width: 56, alignment: .trailing)
         }
@@ -134,9 +134,9 @@ private struct WindowRow: View {
 
     private var tint: Color {
         switch window.usedPercent {
-        case ..<75: Color(red: 0.45, green: 0.8, blue: 0.55)
+        case ..<75: .green
         case ..<90: .orange
-        default: Color(red: 1, green: 0.42, blue: 0.42)
+        default: .red
         }
     }
 
@@ -156,7 +156,7 @@ private struct UsageBar: View {
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.08))
+                Capsule().fill(.quinary)
                 Capsule().fill(tint)
                     .frame(width: max(fraction > 0 ? 4 : 0, geo.size.width * min(max(fraction, 0), 1)))
             }
@@ -172,16 +172,16 @@ private struct CostLabel: View {
         HStack(spacing: 4) {
             if let today = cost.todayUSD {
                 Text(Self.money(today))
-                    .foregroundStyle(.white.opacity(0.8))
-                Text("today").foregroundStyle(.white.opacity(0.4))
+                    .foregroundStyle(.primary)
+                Text("today").foregroundStyle(.tertiary)
             }
             if cost.todayUSD != nil, cost.periodUSD != nil {
-                Text("·").foregroundStyle(.white.opacity(0.25))
+                Text("·").foregroundStyle(.quaternary)
             }
             if let period = cost.periodUSD {
                 Text(Self.money(period))
-                    .foregroundStyle(.white.opacity(0.6))
-                Text("30d").foregroundStyle(.white.opacity(0.4))
+                    .foregroundStyle(.secondary)
+                Text("30d").foregroundStyle(.tertiary)
             }
         }
         .font(.system(size: 10.5, weight: .medium).monospacedDigit())

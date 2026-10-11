@@ -44,16 +44,20 @@ struct Orb: View {
     var animated = true
     @State private var holder = OrbHolder()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         let model = holder.model(look: look, size: Double(size))
         let still = !animated || reduceMotion
+        let light = colorScheme == .light
+        let floor = light ? 0.35 : 0.2
+        let ink = light ? color.mix(with: .black, by: 0.25) : color
         TimelineView(.animation(paused: still)) { context in
             let t = still ? 0 : context.date.timeIntervalSince(OrbClock.epoch) * 1000
             Canvas { ctx, _ in
                 model.draw(t: t) { x, y, r, a in
                     ctx.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r)),
-                             with: .color(color.opacity(a)))
+                             with: .color(ink.opacity(floor + (1 - floor) * a)))
                 }
             }
         }

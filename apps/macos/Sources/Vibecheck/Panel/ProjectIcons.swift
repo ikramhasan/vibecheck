@@ -50,16 +50,16 @@ struct ProjectBadge: View {
             } else {
                 Text(project.monogram)
                     .font(.system(size: size * 0.46, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.78))
+                    .foregroundStyle(.primary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.white.opacity(0.1))
+                    .background(Color.primary.opacity(0.1))
             }
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5)
         )
         .accessibilityHidden(true)
     }

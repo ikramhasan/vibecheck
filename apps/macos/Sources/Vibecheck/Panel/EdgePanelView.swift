@@ -112,15 +112,7 @@ struct EdgePanelView: View {
         }
         .frame(width: width, height: height, alignment: .trailing)
         .clipShape(EdgeTabShape())
-        .background {
-            EdgeTabShape()
-                .fill(Color(white: 0.055))
-                .shadow(color: .black.opacity(expanded ? 0.45 : 0.25),
-                        radius: expanded ? 24 : 8, x: -2, y: expanded ? 10 : 2)
-        }
-        .overlay {
-            EdgeTabShape().stroke(Color.white.opacity(0.08), lineWidth: 1)
-        }
+        .glassEffect(.regular, in: EdgeTabShape())
     }
 
     private func pageHeight(_ groups: [SessionGroup]) -> CGFloat {
@@ -142,6 +134,17 @@ private struct CollapsedContent: View {
     var body: some View {
         let ordered = groups.flatMap { g in g.sessions.map { (g.project, $0) } }
         let visible = ordered.prefix(PanelMetrics.maxVisible)
+        GlassEffectContainer(spacing: 4) {
+            badges(ordered: ordered, visible: visible)
+        }
+        .padding(.leading, 3) // optically center between left edge and screen edge
+        .animation(.spring(response: 0.4, dampingFraction: 0.7), value: ordered.map(\.1.id))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(sessions.isEmpty ? "Agent usage" : accessibilitySummary)
+    }
+
+    private func badges(ordered: [(ProjectInfo, AgentSession)],
+                        visible: ArraySlice<(ProjectInfo, AgentSession)>) -> some View {
         VStack(spacing: PanelMetrics.collapsedSlot - PanelMetrics.badgeSize) {
             ForEach(visible, id: \.1.id) { project, session in
                 SessionBadge(project: project, session: session,
@@ -152,20 +155,16 @@ private struct CollapsedContent: View {
                 // Only usage to show: a quiet gauge so the tab still reads as something.
                 Image(systemName: "gauge.with.dots.needle.50percent")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.55))
+                    .foregroundStyle(.secondary)
                     .frame(height: PanelMetrics.badgeSize)
             }
             if ordered.count > visible.count {
                 Text("+\(ordered.count - visible.count)")
                     .font(.system(size: 10, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.6))
+                    .foregroundStyle(.secondary)
                     .frame(height: PanelMetrics.badgeSize)
             }
         }
-        .padding(.leading, 3) // optically center between left edge and screen edge
-        .animation(.spring(response: 0.4, dampingFraction: 0.7), value: ordered.map(\.1.id))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(sessions.isEmpty ? "Agent usage" : accessibilitySummary)
     }
 
     private var accessibilitySummary: String {
@@ -185,10 +184,9 @@ private struct SessionBadge: View {
             .overlay(alignment: .topTrailing) {
                 if runsServer {
                     PromptGlyph(size: 7, lineWidth: 1.3)
-                        .foregroundStyle(.white.opacity(0.8))
+                        .foregroundStyle(.primary)
                         .frame(width: 13, height: 13)
-                        .background(Circle().fill(Color(white: 0.11)))
-                        .overlay(Circle().strokeBorder(Color(white: 0.055), lineWidth: 1.5))
+                        .glassEffect(.regular, in: .circle)
                         .offset(x: 4, y: -4)
                         .transition(.scale(scale: 0.3).combined(with: .opacity))
                 }
@@ -196,8 +194,7 @@ private struct SessionBadge: View {
             .overlay(alignment: .bottomTrailing) {
                 AgentGlyph(agentID: session.agent.id, size: 8)
                     .frame(width: 13, height: 13)
-                    .background(Circle().fill(Color(white: 0.11)))
-                    .overlay(Circle().strokeBorder(Color(white: 0.055), lineWidth: 1.5))
+                    .glassEffect(.regular, in: .circle)
                     .offset(x: 4, y: 4)
             }
             .help("\(session.agent.name) · \(project.name)")
@@ -228,12 +225,12 @@ struct StatusIndicator: View {
 extension StatusPresentation.Tint {
     var color: Color {
         switch self {
-        case .accent: Color(red: 0.32, green: 0.56, blue: 1.0)
+        case .accent: .blue
         case .attention: .orange
         case .success: .green
-        case .muted: Color(white: 0.6)
-        case .limited: Color(red: 1, green: 0.84, blue: 0.3)
-        case .failure: Color(red: 1, green: 0.42, blue: 0.4)
+        case .muted: .gray
+        case .limited: .yellow
+        case .failure: .red
         }
     }
 }
@@ -262,6 +259,8 @@ private struct ExpandedContent: View {
     let onShowServers: (AgentSession) -> Void
     let onStopServer: (DevServer) -> Void
     let onQuit: () -> Void
+
+    @Namespace private var glass
 
     private var onServers: Bool { tab == .servers }
     private var sessionsShown: Bool { isShown && !onServers }
@@ -326,22 +325,32 @@ private struct ExpandedContent: View {
     }
 
     private var header: some View {
-        HStack(spacing: 4) {
-            TabButton(title: "Agents", count: sessionCount, waiting: waitingCount, selected: !onServers) {
+        HStack(spacing: 2) {
+            TabButton(title: "Agents", count: sessionCount, waiting: waitingCount, selected: !onServers,
+                      namespace: glass) {
                 onSelectTab(.sessions)
             }
-            TabButton(title: "Servers", count: servers.count, selected: onServers) { onSelectTab(.servers) }
-            Spacer()
-            if clearableCount > 0 && !onServers {
-                HeaderButton(systemImage: "checkmark.circle", label: "Clear completed from the edge tab",
-                             action: onClearCompleted)
+            TabButton(title: "Servers", count: servers.count, selected: onServers, namespace: glass) {
+                onSelectTab(.servers)
             }
-            HeaderButton(systemImage: "gearshape", label: "Settings", action: onOpenSettings)
-            HeaderButton(systemImage: "power", label: "Quit vibecheck", action: onQuit)
+            Spacer()
+            GlassEffectContainer(spacing: 4) {
+                HStack(spacing: 4) {
+                    if clearableCount > 0 && !onServers {
+                        HeaderButton(systemImage: "checkmark", label: "Clear completed from the edge tab",
+                                     action: onClearCompleted)
+                            .glassEffectID("clear", in: glass)
+                    }
+                    HeaderButton(systemImage: "gearshape", label: "Settings", action: onOpenSettings)
+                        .glassEffectID("settings", in: glass)
+                    HeaderButton(systemImage: "power", label: "Quit vibecheck", action: onQuit)
+                        .glassEffectID("quit", in: glass)
+                }
+            }
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: clearableCount > 0 && !onServers)
         }
         .frame(height: PanelMetrics.headerHeight)
-        .padding(.leading, 10)
-        .padding(.trailing, 16)
+        .padding(.horizontal, 10)
     }
 
     private var list: some View {
@@ -349,13 +358,13 @@ private struct ExpandedContent: View {
             if groups.isEmpty {
                 Text("No agents running")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.4))
+                    .foregroundStyle(.tertiary)
                     .frame(maxWidth: .infinity, minHeight: PanelMetrics.emptyListHeight)
                     .cascade(shown: sessionsShown, index: 1, side: sessionsSide, paced: paced)
             }
             ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
                 if index > 0 {
-                    Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1)
+                    Rectangle().fill(.separator).frame(height: 1)
                         .padding(.horizontal, 18)
                         .frame(height: PanelMetrics.groupDivider)
                         .cascade(shown: sessionsShown, index: index, side: sessionsSide, paced: paced)
@@ -381,12 +390,12 @@ private struct HeaderButton: View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(hovering ? 0.85 : 0.45))
-                .frame(width: 22, height: 22)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(hovering ? 0.06 : 0)))
-                .contentShape(Rectangle())
+                .foregroundStyle(hovering ? HierarchicalShapeStyle.primary : .secondary)
+                .frame(width: 24, height: 24)
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: .circle)
         .onHover { h in withAnimation(.easeOut(duration: 0.12)) { hovering = h } }
         .help(label)
         .accessibilityLabel(label)
@@ -398,6 +407,7 @@ private struct TabButton: View {
     let count: Int
     var waiting = 0
     let selected: Bool
+    let namespace: Namespace.ID
     let action: () -> Void
     @State private var hovering = false
 
@@ -406,7 +416,7 @@ private struct TabButton: View {
             HStack(spacing: 6) {
                 Text(title)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white.opacity(selected ? 1 : hovering ? 0.7 : 0.42))
+                    .foregroundStyle(selected ? HierarchicalShapeStyle.primary : hovering ? .secondary : .tertiary)
                 if waiting > 0 {
                     Text("\(waiting) waiting")
                         .font(.system(size: 11, weight: .medium).monospacedDigit())
@@ -416,16 +426,22 @@ private struct TabButton: View {
                 } else {
                     Text("\(count)")
                         .font(.system(size: 11, weight: .medium).monospacedDigit())
-                        .foregroundStyle(.white.opacity(selected ? 0.5 : 0.35))
+                        .foregroundStyle(selected ? HierarchicalShapeStyle.secondary : .tertiary)
                         .padding(.horizontal, 6).padding(.vertical, 1)
-                        .background(Capsule().fill(Color.white.opacity(selected ? 0.08 : 0.05)))
+                        .background(Capsule().fill(.quinary))
                 }
             }
             .fixedSize()
-            .padding(.horizontal, 6)
-            .frame(height: 26)
-            .background(RoundedRectangle(cornerRadius: 7).fill(Color.white.opacity(hovering && !selected ? 0.05 : 0)))
-            .contentShape(Rectangle())
+            .padding(.horizontal, 8)
+            .frame(height: 28)
+            .background {
+                if selected {
+                    Color.clear
+                        .glassEffect(.regular.interactive(), in: .capsule)
+                        .matchedGeometryEffect(id: "tabSelection", in: namespace)
+                }
+            }
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .onHover { h in withAnimation(.easeOut(duration: 0.12)) { hovering = h } }
@@ -435,7 +451,7 @@ private struct TabButton: View {
 }
 
 private struct CircleButton<Icon: View>: View {
-    static var size: CGFloat { 18 }
+    static var size: CGFloat { 20 }
     static var spacing: CGFloat { 4 }
 
     let label: String
@@ -447,12 +463,12 @@ private struct CircleButton<Icon: View>: View {
     var body: some View {
         Button(action: action) {
             icon
-                .foregroundStyle(.white.opacity(hovering ? 0.9 : 0.5))
+                .foregroundStyle(hovering ? HierarchicalShapeStyle.primary : .secondary)
                 .frame(width: Self.size, height: Self.size)
-                .background(Circle().fill(Color.white.opacity(hovering ? 0.14 : 0.08)))
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: .circle)
         .onHover { h in withAnimation(.easeOut(duration: 0.12)) { hovering = h } }
         .help(help)
         .accessibilityLabel(label)
@@ -473,13 +489,13 @@ private struct ProjectGroupView: View {
                 ProjectBadge(project: group.project, size: 18)
                 Text(group.project.name)
                     .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                 Spacer(minLength: 6)
                 if group.sessions.count > 1 {
                     Text("\(group.sessions.count) agents")
                         .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.32))
+                        .foregroundStyle(.tertiary)
                 }
             }
             .frame(height: PanelMetrics.groupHeader)
@@ -530,7 +546,7 @@ private struct SessionLine: View {
                 if let detail = StatusPresentation.detail(session) {
                     Text(detail)
                         .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.42))
+                        .foregroundStyle(.tertiary)
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
@@ -543,7 +559,7 @@ private struct SessionLine: View {
                     TimelineView(.periodic(from: .now, by: 30)) { context in
                         Text(elapsed(now: context.date))
                             .font(.system(size: 11).monospacedDigit())
-                            .foregroundStyle(.white.opacity(0.38))
+                            .foregroundStyle(.tertiary)
                     }
                 }
                 .opacity(showsActions ? 0 : 1)
@@ -555,10 +571,7 @@ private struct SessionLine: View {
             if showsActions { actions.transition(.opacity) }
         }
         .padding(.horizontal, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(highlighted ? Color.orange.opacity(0.1) : Color.white.opacity(hovering ? 0.05 : 0))
-        )
+        .glassEffect(rowGlass, in: .rect(cornerRadius: 12, style: .continuous))
         .contentShape(Rectangle())
         .onHover { h in
             // Resolve lazily: walking the process tree per render would be wasteful.
@@ -576,6 +589,11 @@ private struct SessionLine: View {
         .accessibilityAction(named: "Show servers") { if !servers.isEmpty { onShowServers() } }
     }
 
+    private var rowGlass: Glass {
+        if highlighted { return .regular.tint(.orange.opacity(0.3)).interactive() }
+        return hovering ? .regular.interactive() : .identity
+    }
+
     private var dismissible: Bool { CompletedFilter.isCompleted(session) }
     private var actionCount: Int { (servers.isEmpty ? 0 : 1) + (dismissible ? 1 : 0) }
     private var showsActions: Bool { hovering && actionCount > 0 }
@@ -585,6 +603,12 @@ private struct SessionLine: View {
     }
 
     private var actions: some View {
+        GlassEffectContainer(spacing: CircleButton<EmptyView>.spacing) {
+            actionButtons
+        }
+    }
+
+    private var actionButtons: some View {
         HStack(spacing: CircleButton<EmptyView>.spacing) {
             if !servers.isEmpty {
                 CircleButton(label: "Show servers",
@@ -603,9 +627,9 @@ private struct SessionLine: View {
 
     private var titleColor: Color {
         switch session.status {
-        case .needsAttention: Color(red: 1, green: 0.82, blue: 0.54)
-        case .error, .working, .blocked: .white.opacity(0.9)
-        case .idle: session.task == nil ? .white.opacity(0.45) : .white.opacity(0.62)
+        case .needsAttention: .orange
+        case .error, .working, .blocked: Color.primary.opacity(0.9)
+        case .idle: session.task == nil ? Color.primary.opacity(0.45) : Color.primary.opacity(0.62)
         }
     }
 
@@ -640,7 +664,7 @@ private struct ContextGauge: View {
     var body: some View {
         HStack(spacing: 3) {
             ZStack {
-                Circle().stroke(Color.white.opacity(0.12), lineWidth: 1.6)
+                Circle().stroke(Color.primary.opacity(0.12), lineWidth: 1.6)
                 Circle().trim(from: 0, to: min(usage.fraction, 1))
                     .stroke(color, style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
                     .rotationEffect(.degrees(-90))
@@ -648,7 +672,7 @@ private struct ContextGauge: View {
             .frame(width: 9, height: 9)
             Text("\(Int((usage.fraction * 100).rounded()))%")
                 .font(.system(size: 10, weight: .medium).monospacedDigit())
-                .foregroundStyle(usage.level == .normal ? .white.opacity(0.38) : color)
+                .foregroundStyle(usage.level == .normal ? Color.primary.opacity(0.38) : color)
         }
         .help(Self.summary(usage))
         .accessibilityElement(children: .ignore)
@@ -657,9 +681,9 @@ private struct ContextGauge: View {
 
     private var color: Color {
         switch usage.level {
-        case .normal: .white.opacity(0.5)
+        case .normal: Color.primary.opacity(0.5)
         case .warning: .orange
-        case .critical: Color(red: 1, green: 0.42, blue: 0.4)
+        case .critical: .red
         }
     }
 

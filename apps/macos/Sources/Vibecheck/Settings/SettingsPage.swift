@@ -33,7 +33,7 @@ struct SettingsPage: View {
                         HStack {
                             Text("Remove finished sessions")
                                 .font(.system(size: 12))
-                                .foregroundStyle(.white.opacity(0.9))
+                                .foregroundStyle(.primary)
                             Spacer(minLength: 6)
                             Picker("Remove finished sessions", selection: $settings.finishedSessionRemoval) {
                                 ForEach(FinishedSessionRemoval.allCases, id: \.self) { Text($0.displayName).tag($0) }
@@ -91,32 +91,32 @@ struct SettingsPage: View {
         }
         .padding(.top, PanelMetrics.flare)
         .padding(.bottom, PanelMetrics.flare)
-        .environment(\.colorScheme, .dark)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Settings")
     }
 
     private var header: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 8) {
             Button(action: onBack) {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.55))
-                    .frame(width: 22, height: 22)
-                    .contentShape(Rectangle())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 26, height: 26)
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
+            .glassEffect(.regular.interactive(), in: .circle)
             .help("Back to agents")
             .accessibilityLabel("Back to agents")
             .keyboardShortcut(.cancelAction)
 
             Text("Settings")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
             Spacer()
         }
         .frame(height: PanelMetrics.headerHeight)
-        .padding(.leading, 10)
+        .padding(.leading, 12)
         .padding(.trailing, 16)
     }
 
@@ -149,7 +149,7 @@ private struct SettingsSection<Content: View>: View {
         VStack(alignment: .leading, spacing: 7) {
             Text(title)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.45))
+                .foregroundStyle(.tertiary)
                 .textCase(.uppercase)
                 .tracking(0.4)
                 .padding(.horizontal, 4)
@@ -157,16 +157,9 @@ private struct SettingsSection<Content: View>: View {
 
             if grouped {
                 VStack(alignment: .leading, spacing: 0) { content }
-                    .padding(.horizontal, 10)
+                    .padding(.horizontal, 12)
                     .padding(.vertical, 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(Color.white.opacity(0.045))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.05), lineWidth: 1)
-                    )
+                    .glassEffect(.regular, in: .rect(cornerRadius: 16, style: .continuous))
             } else {
                 content
             }
@@ -174,7 +167,7 @@ private struct SettingsSection<Content: View>: View {
             if let footer {
                 Text(footer)
                     .font(.system(size: 10.5))
-                    .foregroundStyle(.white.opacity(0.38))
+                    .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 4)
             }
@@ -184,7 +177,7 @@ private struct SettingsSection<Content: View>: View {
 
 private struct RowDivider: View {
     var body: some View {
-        Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1)
+        Rectangle().fill(.separator).frame(height: 1)
     }
 }
 
@@ -202,7 +195,7 @@ private struct AgentsList: View {
         if agents.isEmpty {
             Text("No agents added yet.")
                 .font(.system(size: 12))
-                .foregroundStyle(.white.opacity(0.45))
+                .foregroundStyle(.tertiary)
                 .frame(height: 30)
         } else {
             Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 0) {
@@ -213,7 +206,7 @@ private struct AgentsList: View {
                     Color.clear.frame(width: 14, height: 1)
                 }
                 .font(.system(size: 10.5, weight: .medium))
-                .foregroundStyle(.white.opacity(0.4))
+                .foregroundStyle(.tertiary)
                 .frame(height: 22)
 
                 ForEach(agents, id: \.id) { agent in
@@ -222,7 +215,7 @@ private struct AgentsList: View {
                             AgentGlyph(agentID: agent.id)
                             Text(agent.name)
                                 .font(.system(size: 12))
-                                .foregroundStyle(.white.opacity(0.9))
+                                .foregroundStyle(.primary)
                                 .lineLimit(1)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -246,7 +239,7 @@ private struct AgentsList: View {
                         } label: {
                             Image(systemName: "minus.circle.fill")
                                 .font(.system(size: 12))
-                                .foregroundStyle(.white.opacity(0.35))
+                                .foregroundStyle(.tertiary)
                         }
                         .buttonStyle(.plain)
                         .opacity(settings.agents.added.contains(agent.id) ? 1 : 0)
@@ -274,13 +267,12 @@ private struct AgentsList: View {
                     .help(reason)
             case .loaded:
                 Button("Refresh usage") { usage.refreshAll() }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(settings.agents.usage.isEmpty ? 0.25 : 0.5))
+                    .buttonStyle(.glass)
+                    .controlSize(.small)
                     .disabled(settings.agents.usage.isEmpty)
             }
         }
-        .frame(height: 32)
+        .frame(height: 38)
     }
 
     /// Usage needs a CodexBar provider with that id. Agents that only report sessions
@@ -301,10 +293,10 @@ private struct AddAgentMenu: View {
             showingPicker = true
         } label: {
             Label("Add agent…", systemImage: "plus")
-                .font(.system(size: 12))
-                .foregroundStyle(usage.catalog.isEmpty ? Color.white.opacity(0.3) : Color.accentColor)
+                .font(.system(size: 12, weight: .medium))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glass)
+        .controlSize(.small)
         .disabled(usage.catalog.isEmpty)
         .popover(isPresented: $showingPicker, arrowEdge: .leading) {
             VStack(alignment: .leading, spacing: 8) {
@@ -355,11 +347,11 @@ private struct SoundsList: View {
         HStack(spacing: 8) {
             Text("Volume")
                 .font(.system(size: 12))
-                .foregroundStyle(.white.opacity(0.9))
+                .foregroundStyle(.primary)
             Spacer(minLength: 6)
             Image(systemName: "speaker.fill")
                 .font(.system(size: 9))
-                .foregroundStyle(.white.opacity(0.4))
+                .foregroundStyle(.tertiary)
             Slider(value: $settings.sounds.volume, in: 0...1) { editing in
                 guard !editing, let name = SoundEvent.allCases.lazy.compactMap(settings.sounds.sound(for:)).first else { return }
                 SoundPlayer.play(name, volume: settings.sounds.volume)
@@ -370,7 +362,7 @@ private struct SoundsList: View {
             .accessibilityLabel("Sound volume")
             Image(systemName: "speaker.wave.3.fill")
                 .font(.system(size: 9))
-                .foregroundStyle(.white.opacity(0.4))
+                .foregroundStyle(.tertiary)
         }
         .frame(height: 30)
     }
@@ -391,7 +383,7 @@ private struct SoundRow: View {
         HStack(spacing: 6) {
             Text(event.displayName)
                 .font(.system(size: 12))
-                .foregroundStyle(.white.opacity(0.9))
+                .foregroundStyle(.primary)
                 .lineLimit(1)
             Spacer(minLength: 6)
             Picker("Sound for \(event.displayName)", selection: choice) {
@@ -409,7 +401,7 @@ private struct SoundRow: View {
             } label: {
                 Image(systemName: "play.circle.fill")
                     .font(.system(size: 14))
-                    .foregroundStyle(.white.opacity(choice.wrappedValue == nil ? 0.2 : 0.55))
+                    .foregroundStyle(Color.primary.opacity(choice.wrappedValue == nil ? 0.2 : 0.55))
             }
             .buttonStyle(.plain)
             .disabled(choice.wrappedValue == nil)
@@ -433,9 +425,13 @@ private struct LoaderGallery: View {
     @Binding var selection: LoaderStyle
 
     var body: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
-            ForEach(LoaderStyle.allCases, id: \.self) { style in
-                LoaderTile(style: style, selected: style == selection) { selection = style }
+        GlassEffectContainer(spacing: 0) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                ForEach(LoaderStyle.allCases, id: \.self) { style in
+                    LoaderTile(style: style, selected: style == selection) {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { selection = style }
+                    }
+                }
             }
         }
     }
@@ -445,35 +441,29 @@ private struct LoaderTile: View {
     let style: LoaderStyle
     let selected: Bool
     let action: () -> Void
-    @State private var hovering = false
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Button(action: action) {
             VStack(spacing: 0) {
-                Orb(look: OrbLook(style), size: 26, color: StatusPresentation.Tint.accent.color)
+                Orb(look: OrbLook(style), size: 34, color: selected ? .white : StatusPresentation.Tint.accent.color)
+                    .padding(.top, 4)
+                    .environment(\.colorScheme, selected ? .dark : colorScheme)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 Text(style.displayName)
                     .font(.system(size: 10.5, weight: .medium))
-                    .foregroundStyle(.white.opacity(selected ? 0.95 : 0.6))
+                    .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 9)
                     .padding(.bottom, 7)
             }
-            .frame(height: 68)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.white.opacity(hovering ? 0.09 : 0.06))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(selected ? Color.accentColor : Color.white.opacity(0.07),
-                                  lineWidth: selected ? 2 : 1)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .frame(height: 76)
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
-        .onHover { h in withAnimation(.easeOut(duration: 0.12)) { hovering = h } }
+        .glassEffect(selected ? .regular.tint(.accentColor.opacity(0.75)).interactive() : .regular.interactive(),
+                     in: .rect(cornerRadius: 14, style: .continuous))
         .accessibilityLabel(style.displayName)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
@@ -493,7 +483,7 @@ private struct AgentLoaderRow: View {
             AgentGlyph(agentID: agent.id)
             Text(agent.name)
                 .font(.system(size: 12))
-                .foregroundStyle(.white.opacity(0.9))
+                .foregroundStyle(.primary)
                 .lineLimit(1)
             Spacer(minLength: 6)
             Orb(look: OrbLook(settings.loader.style(for: agent.id)), size: 18, color: StatusPresentation.Tint.accent.color)

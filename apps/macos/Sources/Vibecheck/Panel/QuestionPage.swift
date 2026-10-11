@@ -103,10 +103,12 @@ struct QuestionPage: View {
     }
 
     private var cards: some View {
-        VStack(spacing: QuestionMetrics.cardSpacing) {
-            ForEach(sessions) { session in
-                QuestionCard(session: session)
-                    .frame(height: QuestionMetrics.cardHeight(session), alignment: .top)
+        GlassEffectContainer(spacing: QuestionMetrics.cardSpacing) {
+            VStack(spacing: QuestionMetrics.cardSpacing) {
+                ForEach(sessions) { session in
+                    QuestionCard(session: session)
+                        .frame(height: QuestionMetrics.cardHeight(session), alignment: .top)
+                }
             }
         }
         .padding(.horizontal, QuestionMetrics.pagePadding)
@@ -116,7 +118,7 @@ struct QuestionPage: View {
         HStack(spacing: 8) {
             Text("Needs you")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
             if sessions.count > 1 {
                 Text("\(sessions.count)")
                     .font(.system(size: 11, weight: .medium).monospacedDigit())
@@ -125,14 +127,21 @@ struct QuestionPage: View {
                     .background(Capsule().fill(Color.orange.opacity(0.14)))
             }
             Spacer()
-            Button("Show all", action: onShowAll)
-                .buttonStyle(.plain)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.white.opacity(0.5))
-                .help("Show every agent session")
+            Button(action: onShowAll) {
+                Text("Show all")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 10)
+                    .frame(height: 26)
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .glassEffect(.regular.interactive(), in: .capsule)
+            .help("Show every agent session")
         }
         .frame(height: PanelMetrics.headerHeight)
-        .padding(.horizontal, 16)
+        .padding(.leading, 16)
+        .padding(.trailing, 12)
     }
 }
 
@@ -148,14 +157,14 @@ private struct QuestionCard: View {
                 ProjectBadge(project: project, size: 18)
                 Text(project.name)
                     .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                 Spacer(minLength: 6)
                 AgentGlyph(agentID: session.agent.id, size: 12)
                 TimelineView(.periodic(from: .now, by: 30)) { context in
                     Text(ElapsedFormat.short(since: session.statusSince ?? session.updatedAt, now: context.date))
                         .font(.system(size: 11).monospacedDigit())
-                        .foregroundStyle(.white.opacity(0.38))
+                        .foregroundStyle(.tertiary)
                 }
             }
             .frame(height: QuestionMetrics.cardHeader)
@@ -172,7 +181,7 @@ private struct QuestionCard: View {
             HStack(spacing: 6) {
                 Text(StatusPresentation.task(session))
                     .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.38))
+                    .foregroundStyle(.tertiary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Spacer(minLength: 6)
@@ -186,15 +195,9 @@ private struct QuestionCard: View {
             .frame(height: QuestionMetrics.footer)
         }
         .padding(QuestionMetrics.cardPadding)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.orange.opacity(hovering ? 0.1 : 0.07))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Color.orange.opacity(0.25), lineWidth: 1)
-        )
-        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .glassEffect(.regular.tint(.orange.opacity(hovering ? 0.3 : 0.2)).interactive(),
+                     in: .rect(cornerRadius: 16, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .onAppear { target = SessionJumper.target(for: session) }
         .onHover { h in withAnimation(.easeOut(duration: 0.12)) { hovering = h } }
         .onTapGesture { SessionJumper.jump(to: session) }
@@ -222,12 +225,12 @@ private struct QuestionBlock: View {
             }
             Text(question.question)
                 .font(Font(QuestionMetrics.questionFont))
-                .foregroundStyle(Color(red: 1, green: 0.88, blue: 0.7))
+                .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
             if question.multiSelect {
                 Text("Choose one or more")
                     .font(.system(size: 10.5))
-                    .foregroundStyle(.white.opacity(0.4))
+                    .foregroundStyle(.tertiary)
                     .frame(height: QuestionMetrics.captionHeight)
                     .padding(.top, QuestionMetrics.chipGap)
             }
@@ -250,17 +253,17 @@ private struct OptionRow: View {
         VStack(alignment: .leading, spacing: QuestionMetrics.optionTextGap) {
             Text(option.label)
                 .font(Font(QuestionMetrics.labelFont))
-                .foregroundStyle(.white.opacity(0.92))
+                .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
             if let description = option.description {
                 Text(description)
                     .font(Font(QuestionMetrics.descriptionFont))
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(QuestionMetrics.optionPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.05)))
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.quinary))
     }
 }

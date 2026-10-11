@@ -98,17 +98,17 @@ enum AgentAppearance {
     ]
 
     static func tint(for id: String) -> Color {
-        brandHex[id].map(brandColor) ?? .white.opacity(0.7)
+        brandHex[id].map(brandColor) ?? Color.primary.opacity(0.7)
     }
 
     static func brandColor(_ hex: UInt32) -> Color {
         let c = Color(red: Double((hex >> 16) & 0xFF) / 255,
                       green: Double((hex >> 8) & 0xFF) / 255,
                       blue: Double(hex & 0xFF) / 255)
-        // Near-black brands (Replicate, TypeSafe, …) would vanish on the dark panel.
+        // Near-black (Replicate, TypeSafe, …) and near-white brands vanish on glass in one appearance or the other.
         let luminance = 0.2126 * Double((hex >> 16) & 0xFF) + 0.7152 * Double((hex >> 8) & 0xFF)
             + 0.0722 * Double(hex & 0xFF)
-        return luminance < 60 ? .white.opacity(0.85) : c
+        return luminance < 60 || luminance > 225 ? Color.primary.opacity(0.85) : c
     }
 
     /// SwiftPM's resource bundle: in `Contents/Resources` of the .app, or next to the
