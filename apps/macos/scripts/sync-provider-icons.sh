@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 VERSION="0.73.0"
 REPO="steipete/CodexBar"
 SRC="Sources/CodexBar/Resources"
-DEST="Sources/AgentCompanion/Resources/ProviderIcons"
+DEST="Sources/Vibecheck/Resources/ProviderIcons"
 
 names=$(gh api "repos/$REPO/contents/$SRC?ref=v$VERSION" \
   -q '.[] | select(.name | test("^ProviderIcon-.*\\.svg$")) | .name')

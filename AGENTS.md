@@ -10,7 +10,7 @@
 
 ## Never modify agent files
 
-Agent Companion only observes agents. Its code must never write, move, rename,
+vibecheck only observes agents. Its code must never write, move, rename,
 delete, truncate, lock, or change the attributes of any file an agent owns:
 transcripts, session registries (`~/.claude/sessions/`, `~/.codex/`, pi's
 session folders), settings, logs, or anything else under an agent's data
@@ -19,8 +19,8 @@ directories.
 - Open agent files read-only (`FileHandle(forReadingFrom:)`, `O_RDONLY`,
   `O_EVTONLY`), and only to read or watch them.
 - The app may write only to its own locations: the status directory
-  (`~/Library/Application Support/AgentCompanion/sessions`, or
-  `$AGENT_COMPANION_DIR`) and its own preferences.
+  (`~/Library/Application Support/vibecheck/sessions`, or
+  `$VIBECHECK_DIR`) and its own preferences.
 - Opt-in hooks and extensions may write only status files to that status
   directory. Installing them is the user's choice and is documented, never done
   silently.
@@ -38,7 +38,7 @@ git clone --depth 1 <url> reference/<name>
 | Project | License | Why it's here |
 |---|---|---|
 | [agentsview](https://github.com/kenn-io/agentsview) | MIT | Archive, search and cost tracking for ~60 agents. Its per-agent parsers in `internal/parser/` document where each agent stores sessions and what format it uses |
-| [thinking-orbs](https://github.com/yogesharc/thinking-orbs) | MIT | The dot-sphere status orbs. `apps/web/registry/orb/orb-core.ts` is ported to `apps/macos/Sources/AgentCompanion/Orbs/Orb.swift` |
+| [thinking-orbs](https://github.com/yogesharc/thinking-orbs) | MIT | The dot-sphere status orbs. `apps/web/registry/orb/orb-core.ts` is ported to `apps/macos/Sources/Vibecheck/Orbs/Orb.swift` |
 
 When code is ported from a project here, respect its license and credit it at
 the place it's used.

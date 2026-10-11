@@ -1,13 +1,13 @@
 # Integration contract
 
-Agent Companion doesn't know about specific agents. Each agent integration writes
+vibecheck doesn't know about specific agents. Each agent integration writes
 one JSON file per live session to:
 
 ```
-~/Library/Application Support/AgentCompanion/sessions/<agent>--<session>.json
+~/Library/Application Support/vibecheck/sessions/<agent>--<session>.json
 ```
 
-(`$AGENT_COMPANION_DIR/sessions` if set.) The format is `session-status.schema.json`.
+(`$VIBECHECK_DIR/sessions` if set.) The format is `session-status.schema.json`.
 
 - Write atomically (temp file + rename). Delete the file when the session ends.
 - Include `pid` of the long-lived agent process. The app prunes files whose
@@ -26,7 +26,7 @@ one JSON file per live session to:
    throttling and cleanup. The integration only maps the agent's events to
    `reporter.update({...})`.
 3. Optionally add branding in
-   `apps/macos/Sources/AgentCompanion/Panel/AgentAppearance.swift`. Unknown
+   `apps/macos/Sources/Vibecheck/Panel/AgentAppearance.swift`. Unknown
    agents get a generic icon.
 
 The app needs no changes. For agents that run hook *commands* per event

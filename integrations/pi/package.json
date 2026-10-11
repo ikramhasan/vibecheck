@@ -1,13 +1,13 @@
 {
-  "name": "pi-agent-companion",
+  "name": "pi-vibecheck",
   "version": "0.1.0",
-  "description": "Reports pi session status to the Agent Companion macOS edge panel.",
+  "description": "Reports pi session status to the vibecheck macOS edge panel.",
   "private": true,
   "type": "module",
   "keywords": ["pi-package"],
   "license": "MIT",
   "pi": {
-    "extensions": ["./extensions/agent-companion.ts"]
+    "extensions": ["./extensions/vibecheck.ts"]
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*"

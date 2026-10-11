@@ -4,7 +4,7 @@ import OSLog
 
 @MainActor
 enum TerminalFocus {
-    private static let log = Logger(subsystem: "com.ikramulhasan.AgentCompanion", category: "jump")
+    private static let log = Logger(subsystem: "com.ikramulhasan.vibecheck", category: "jump")
 
     static func supports(_ bundleId: String) -> Bool {
         script(bundleId: bundleId, tty: "") != nil

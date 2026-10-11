@@ -27,7 +27,7 @@ public struct CodexBarCLI: Sendable {
     public static func locate(bundle: Bundle = .main,
                               environment: [String: String] = ProcessInfo.processInfo.environment) -> CodexBarCLI? {
         var candidates: [URL] = []
-        if let override = environment["AGENT_COMPANION_CODEXBAR"], !override.isEmpty {
+        if let override = environment["VIBECHECK_CODEXBAR"], !override.isEmpty {
             candidates.append(URL(fileURLWithPath: override))
         }
         candidates.append(bundle.bundleURL.appending(path: "Contents/Helpers/CodexBarCLI"))

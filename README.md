@@ -1,9 +1,9 @@
-# Agent Companion
+# vibecheck
 
 A native macOS edge panel that shows live coding-agent sessions.
 
 ```
-apps/macos/            Swift package: CompanionCore (agent-neutral) + AgentCompanion (app)
+apps/macos/            Swift package: CompanionCore (agent-neutral) + Vibecheck (app)
 integrations/core/     Shared session-status contract + reporter used by every integration
 integrations/pi/       pi package (extension) that reports pi sessions
 ```
@@ -16,14 +16,14 @@ to add another agent.
 
 ```bash
 apps/macos/scripts/bundle.sh                       # build the .app
-open apps/macos/build/AgentCompanion.app           # live data
+open apps/macos/build/vibecheck.app                # live data
 ```
 
 Launch options:
 
 ```bash
-open apps/macos/build/AgentCompanion.app --args --demo              # sample sessions
-open apps/macos/build/AgentCompanion.app --args --demo --settings   # also open Settings
+open apps/macos/build/vibecheck.app --args --demo              # sample sessions
+open apps/macos/build/vibecheck.app --args --demo --settings   # also open Settings
 ```
 
 Without `--demo` the panel shows running Claude Code, Codex and pi sessions by reading their
@@ -34,7 +34,7 @@ power button quits.
 If an older build is still running, quit it first so the new one loads:
 
 ```bash
-pkill -x AgentCompanion
+pkill -x Vibecheck
 ```
 
 ## Usage stats (CodexBar)
@@ -48,7 +48,7 @@ Settings and each agent's 5h/weekly limits, reset times and local cost estimate.
 In Settings → Agents, add agents and toggle **Status** (running sessions) and **Usage** per agent.
 With any usage enabled the tab stays visible even when no agent is running. Usage refreshes every
 5 minutes and when the panel opens with stale data. During `swift run`, set
-`AGENT_COMPANION_CODEXBAR=/path/to/CodexBarCLI` or have `codexbar` installed via Homebrew.
+`VIBECHECK_CODEXBAR=/path/to/CodexBarCLI` or have `codexbar` installed via Homebrew.
 
 ## pi extension (optional)
 

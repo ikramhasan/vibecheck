@@ -285,7 +285,7 @@ private struct ExpandedContent: View {
                              action: onClearCompleted)
             }
             HeaderButton(systemImage: "gearshape", label: "Settings", action: onOpenSettings)
-            HeaderButton(systemImage: "power", label: "Quit Agent Companion", action: onQuit)
+            HeaderButton(systemImage: "power", label: "Quit vibecheck", action: onQuit)
         }
         .frame(height: PanelMetrics.headerHeight)
         .padding(.horizontal, 16)

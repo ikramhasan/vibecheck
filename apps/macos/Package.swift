@@ -2,13 +2,13 @@
 import PackageDescription
 
 let package = Package(
-    name: "AgentCompanion",
+    name: "Vibecheck",
     platforms: [.macOS(.v14)],
     targets: [
         // Agent-neutral model, session sources and presentation policy. No UI.
         .target(name: "CompanionCore"),
         // The macOS app: edge panel window + SwiftUI views.
-        .executableTarget(name: "AgentCompanion", dependencies: ["CompanionCore"],
+        .executableTarget(name: "Vibecheck", dependencies: ["CompanionCore"],
                           exclude: ["Orbs/LICENSE"],
                           resources: [.copy("Resources/ProviderIcons")]),
         .testTarget(name: "CompanionCoreTests", dependencies: ["CompanionCore"], resources: [.copy("Fixtures")]),

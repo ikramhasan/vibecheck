@@ -1,6 +1,6 @@
 # pi integration
 
-A pi package that reports each interactive pi session to Agent Companion. It maps
+A pi package that reports each interactive pi session to vibecheck. It maps
 pi extension events onto the shared contract in `../core`; it has no file
 handling of its own.
 
@@ -15,16 +15,16 @@ handling of its own.
 
 Reported: interactive terminal sessions (`tui`) and persisted RPC sessions, which is
 how GUI hosts such as T3 Code run pi. Skipped: print/JSON runs, `--no-session` RPC
-helper runs, and pi-subagents child processes. Set `AGENT_COMPANION_ALL_MODES=1` to
-report every mode, or `AGENT_COMPANION_DISABLE=1` to turn reporting off for one run.
+helper runs, and pi-subagents child processes. Set `VIBECHECK_ALL_MODES=1` to
+report every mode, or `VIBECHECK_DISABLE=1` to turn reporting off for one run.
 
 ## Install / uninstall
 
 This uses pi's standard package commands with a local path:
 
 ```bash
-pi install /absolute/path/to/AgentCompanion/integrations/pi
-pi remove  /absolute/path/to/AgentCompanion/integrations/pi    # or: pi uninstall …
+pi install /absolute/path/to/vibecheck/integrations/pi
+pi remove  /absolute/path/to/vibecheck/integrations/pi    # or: pi uninstall …
 ```
 
 `pi list` shows it, and `pi config` can disable it without removing it. Restart

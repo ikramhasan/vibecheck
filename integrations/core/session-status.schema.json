@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://agent-companion.local/session-status.v1.json",
-  "title": "Agent Companion session status (v1)",
-  "description": "One file per live agent session, written by an agent integration and read by the Agent Companion app. Agent-neutral: nothing here is specific to any one agent.",
+  "$id": "https://vibecheck.local/session-status.v1.json",
+  "title": "vibecheck session status (v1)",
+  "description": "One file per live agent session, written by an agent integration and read by the vibecheck app. Agent-neutral: nothing here is specific to any one agent.",
   "type": "object",
   "required": ["schemaVersion", "agent", "session", "status", "updatedAt"],
   "properties": {

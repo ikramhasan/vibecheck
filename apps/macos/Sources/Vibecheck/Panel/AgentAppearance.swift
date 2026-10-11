@@ -111,7 +111,7 @@ enum AgentAppearance {
     /// SwiftPM's resource bundle: in `Contents/Resources` of the .app, or next to the
     /// binary under `swift run`. Resolved by hand because `Bundle.module` traps when absent.
     private static let iconBundle: Bundle? = {
-        let name = "AgentCompanion_AgentCompanion.bundle"
+        let name = "Vibecheck_Vibecheck.bundle"
         let candidates = [Bundle.main.resourceURL, Bundle.main.executableURL?.deletingLastPathComponent()]
         return candidates.lazy.compactMap { $0?.appending(path: name) }.compactMap(Bundle.init(url:)).first
     }()

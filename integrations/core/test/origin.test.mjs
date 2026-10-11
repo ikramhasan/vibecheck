@@ -17,7 +17,7 @@ test("origin from a terminal and from a GUI host", () => {
 	assert.equal(detectOrigin({}), undefined);
 });
 
-const dir = mkdtempSync(join(tmpdir(), "agent-companion-core-"));
+const dir = mkdtempSync(join(tmpdir(), "vibecheck-core-"));
 after(() => rmSync(dir, { recursive: true, force: true }));
 
 test("reporter writes the origin it was given, or omits it for null", () => {

@@ -2,7 +2,7 @@
  * Agent-neutral session reporter.
  *
  * Every agent integration (pi, Claude Code, Codex, …) uses this to publish its
- * session state to the Agent Companion app. Integrations only translate their
+ * session state to the vibecheck app. Integrations only translate their
  * agent's events into `update()` calls; file layout, atomic writes, throttling
  * and cleanup live here. The on-disk contract is session-status.schema.json.
  *
@@ -55,9 +55,9 @@ export interface ReporterOptions {
 	origin?: SessionOrigin | null;
 }
 
-/** Same resolution rules as the app: AGENT_COMPANION_DIR, else Application Support. */
+/** Same resolution rules as the app: VIBECHECK_DIR, else Application Support. */
 export function statusDirectory(env: NodeJS.ProcessEnv = process.env): string {
-	const base = env.AGENT_COMPANION_DIR || join(homedir(), "Library", "Application Support", "AgentCompanion");
+	const base = env.VIBECHECK_DIR || join(homedir(), "Library", "Application Support", "vibecheck");
 	return join(base, "sessions");
 }
 

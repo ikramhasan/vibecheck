@@ -142,7 +142,7 @@ private func session(_ id: String, _ status: AgentSession.Status, message: Strin
     }
 
     @Test func directoryResolutionMatchesReporter() {
-        let url = StatusDirectorySource.defaultDirectory(environment: ["AGENT_COMPANION_DIR": "/tmp/ac"])
+        let url = StatusDirectorySource.defaultDirectory(environment: ["VIBECHECK_DIR": "/tmp/ac"])
         #expect(url.path == "/tmp/ac/sessions")
     }
 }

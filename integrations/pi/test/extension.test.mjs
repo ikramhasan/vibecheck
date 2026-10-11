@@ -6,12 +6,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 
-const dir = mkdtempSync(join(tmpdir(), "agent-companion-"));
-process.env.AGENT_COMPANION_DIR = dir;
+const dir = mkdtempSync(join(tmpdir(), "vibecheck-"));
+process.env.VIBECHECK_DIR = dir;
 delete process.env.PI_SUBAGENT_CHILD;
 after(() => rmSync(dir, { recursive: true, force: true }));
 
-const { default: extension, describeTool, shouldReport } = await import("../extensions/agent-companion.ts");
+const { default: extension, describeTool, shouldReport } = await import("../extensions/vibecheck.ts");
 
 function fakePi() {
 	const handlers = new Map();

@@ -31,11 +31,11 @@ public final class StatusDirectorySource: SessionSource {
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> URL {
         let base: URL
-        if let override = environment["AGENT_COMPANION_DIR"], !override.isEmpty {
+        if let override = environment["VIBECHECK_DIR"], !override.isEmpty {
             base = URL(fileURLWithPath: (override as NSString).expandingTildeInPath, isDirectory: true)
         } else {
             base = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Library/Application Support/AgentCompanion", isDirectory: true)
+                .appendingPathComponent("Library/Application Support/vibecheck", isDirectory: true)
         }
         return base.appendingPathComponent("sessions", isDirectory: true)
     }

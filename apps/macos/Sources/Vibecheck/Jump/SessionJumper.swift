@@ -8,7 +8,7 @@ import OSLog
 /// Scripting Terminal or iTerm2 asks for Automation access on the first jump there.
 @MainActor
 enum SessionJumper {
-    private nonisolated static let log = Logger(subsystem: "com.ikramulhasan.AgentCompanion", category: "jump")
+    private nonisolated static let log = Logger(subsystem: "com.ikramulhasan.vibecheck", category: "jump")
 
     static func target(for session: AgentSession) -> JumpTarget? {
         JumpResolver.resolve(origin: session.origin, ancestry: session.pid.map(ProcessTree.ancestry) ?? [])

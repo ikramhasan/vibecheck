@@ -1,5 +1,5 @@
 /**
- * Agent Companion — pi integration.
+ * vibecheck — pi integration.
  *
  * Translates pi extension events into the agent-neutral session state defined in
  * integrations/core. All file handling lives in the shared SessionReporter; this
@@ -20,9 +20,9 @@ const AGENT = { id: "pi", name: "pi" };
  * pi-subagents child processes are always skipped.
  */
 export function shouldReport(ctx: ExtensionContext, env: NodeJS.ProcessEnv = process.env): boolean {
-	if (env.AGENT_COMPANION_DISABLE === "1") return false;
+	if (env.VIBECHECK_DISABLE === "1") return false;
 	if (env.PI_SUBAGENT_CHILD === "1") return false;
-	if (env.AGENT_COMPANION_ALL_MODES === "1") return true;
+	if (env.VIBECHECK_ALL_MODES === "1") return true;
 	if (ctx.mode === "tui") return true;
 	if (ctx.mode === "rpc") return Boolean(ctx.sessionManager.getSessionFile());
 	return false;
@@ -72,7 +72,7 @@ export function describeTool(toolName: string, args: any): string {
 	}
 }
 
-export default function agentCompanion(pi: ExtensionAPI) {
+export default function vibecheck(pi: ExtensionAPI) {
 	let reporter: SessionReporter | undefined;
 	// Blocking dialogs can nest; attention clears when the last one closes.
 	let openPrompts = 0;
