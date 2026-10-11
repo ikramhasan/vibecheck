@@ -72,6 +72,10 @@ pi install "$PWD/integrations/pi"     # uninstall: pi remove "$PWD/integrations/
 - A session needs attention (question, permission, input): expands by itself and shows
   only the pending questions, with their options, until you've hovered over it or
   clicked "Show all". A new request re-opens it.
+- Sounds play when a session needs input (Ping), finishes a turn (Glass), or fails or
+  hits a limit (Basso). Settings → Sounds picks any macOS alert sound per event (or
+  None), previews it and sets the volume. Each event type plays at most once every
+  3 seconds, so several sessions finishing together make one sound.
 - Clicking a session selects its exact tab in Terminal or iTerm2 (and its tmux pane);
   other apps are brought forward.
 

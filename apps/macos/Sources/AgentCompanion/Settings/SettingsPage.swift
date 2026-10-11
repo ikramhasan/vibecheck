@@ -47,12 +47,19 @@ struct SettingsPage: View {
                     }
                     .cascade(shown: isShown, index: 2, side: .trailing, paced: paced)
 
+                    SettingsSection("Sounds",
+                                    footer: "Played when a session needs input, finishes, or fails. Sounds are "
+                                        + "your Mac's alert sounds, including any added to ~/Library/Sounds.") {
+                        SoundsList(settings: settings)
+                    }
+                    .cascade(shown: isShown, index: 3, side: .trailing, paced: paced)
+
                     SettingsSection("Loading indicator",
                                     footer: "Shown while an agent is working. Agents without an override use this.",
                                     grouped: false) {
                         LoaderGallery(selection: $settings.loader.global)
                     }
-                    .cascade(shown: isShown, index: 3, side: .trailing, paced: paced)
+                    .cascade(shown: isShown, index: 4, side: .trailing, paced: paced)
 
                     if !agents.isEmpty {
                         SettingsSection("Per agent") {
@@ -63,7 +70,7 @@ struct SettingsPage: View {
                                 }
                             }
                         }
-                        .cascade(shown: isShown, index: 4, side: .trailing, paced: paced)
+                        .cascade(shown: isShown, index: 5, side: .trailing, paced: paced)
                     }
                 }
                 .padding(.horizontal, 14)
@@ -332,6 +339,90 @@ private struct AddAgentMenu: View {
         return usage.catalog.filter {
             !added.contains($0.id) && (q.isEmpty || $0.name.lowercased().contains(q) || $0.id.contains(q))
         }
+    }
+}
+
+// MARK: - Sounds
+
+private struct SoundsList: View {
+    @Bindable var settings: AppSettings
+
+    var body: some View {
+        ForEach(SoundEvent.allCases, id: \.self) { event in
+            SoundRow(event: event, settings: settings)
+            RowDivider()
+        }
+        HStack(spacing: 8) {
+            Text("Volume")
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.9))
+            Spacer(minLength: 6)
+            Image(systemName: "speaker.fill")
+                .font(.system(size: 9))
+                .foregroundStyle(.white.opacity(0.4))
+            Slider(value: $settings.sounds.volume, in: 0...1) { editing in
+                guard !editing, let name = SoundEvent.allCases.lazy.compactMap(settings.sounds.sound(for:)).first else { return }
+                SoundPlayer.play(name, volume: settings.sounds.volume)
+            }
+            .labelsHidden()
+            .controlSize(.mini)
+            .frame(width: 120)
+            .accessibilityLabel("Sound volume")
+            Image(systemName: "speaker.wave.3.fill")
+                .font(.system(size: 9))
+                .foregroundStyle(.white.opacity(0.4))
+        }
+        .frame(height: 30)
+    }
+}
+
+private struct SoundRow: View {
+    let event: SoundEvent
+    @Bindable var settings: AppSettings
+
+    var body: some View {
+        let choice = Binding<String?>(
+            get: { settings.sounds.sound(for: event) },
+            set: { name in
+                settings.sounds.setSound(name, for: event)
+                if let name { SoundPlayer.play(name, volume: settings.sounds.volume) }
+            }
+        )
+        HStack(spacing: 6) {
+            Text(event.displayName)
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.9))
+                .lineLimit(1)
+            Spacer(minLength: 6)
+            Picker("Sound for \(event.displayName)", selection: choice) {
+                Text("None").tag(String?.none)
+                Divider()
+                ForEach(names, id: \.self) { Text($0).tag(String?.some($0)) }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .controlSize(.small)
+            .fixedSize()
+
+            Button {
+                if let name = choice.wrappedValue { SoundPlayer.play(name, volume: settings.sounds.volume) }
+            } label: {
+                Image(systemName: "play.circle.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.white.opacity(choice.wrappedValue == nil ? 0.2 : 0.55))
+            }
+            .buttonStyle(.plain)
+            .disabled(choice.wrappedValue == nil)
+            .help("Preview")
+            .accessibilityLabel("Preview \(event.displayName) sound")
+        }
+        .frame(height: 30)
+    }
+
+    private var names: [String] {
+        let current = settings.sounds.sound(for: event)
+        guard let current, !SoundPlayer.available.contains(current) else { return SoundPlayer.available }
+        return SoundPlayer.available + [current]
     }
 }
 

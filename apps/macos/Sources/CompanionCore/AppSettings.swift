@@ -159,12 +159,17 @@ public final class AppSettings {
         didSet { if finishedSessionRemoval != oldValue { defaults.set(finishedSessionRemoval.rawValue, forKey: Keys.finishedSessionRemoval) } }
     }
 
+    public var sounds: SoundSettings {
+        didSet { if sounds != oldValue { save(sounds, key: Keys.sounds) } }
+    }
+
     @ObservationIgnored private let defaults: UserDefaults
 
     private enum Keys {
         static let loader = "settings.loader"
         static let agents = "settings.agents"
         static let finishedSessionRemoval = "settings.finishedSessionRemoval"
+        static let sounds = "settings.sounds"
     }
 
     public init(defaults: UserDefaults = .standard) {
@@ -173,6 +178,7 @@ public final class AppSettings {
         agents = Self.load(AgentPreferences.self, key: Keys.agents, from: defaults) ?? AgentPreferences()
         finishedSessionRemoval = defaults.string(forKey: Keys.finishedSessionRemoval)
             .flatMap(FinishedSessionRemoval.init(rawValue:)) ?? .default
+        sounds = Self.load(SoundSettings.self, key: Keys.sounds, from: defaults) ?? .default
     }
 
     private func save<T: Encodable>(_ value: T, key: String) {

@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var store: SessionStore?
     private var usage: UsageStore?
     private var controller: EdgePanelController?
+    private var soundPlanner = SoundPlanner()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let args = CommandLine.arguments
@@ -24,6 +25,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             store.setHiddenAgents(prefs.hiddenStatus)
             usage.setEnabled(prefs.usage)
         }
+        observeSessions(store) { [weak self] sessions in
+            guard let self else { return }
+            for event in soundPlanner.update(sessions) { SoundPlayer.play(event, settings: settings.sounds) }
+        }
         controller.show()
         store.start()
         usage.start()
@@ -37,6 +42,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Task { @MainActor in self?.observeAgentPreferences(settings, apply) }
         }
         apply(prefs)
+    }
+
+    private func observeSessions(_ store: SessionStore, _ apply: @escaping @MainActor ([AgentSession]) -> Void) {
+        let sessions = withObservationTracking { store.sessions } onChange: { [weak self] in
+            Task { @MainActor in self?.observeSessions(store, apply) }
+        }
+        apply(sessions)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
