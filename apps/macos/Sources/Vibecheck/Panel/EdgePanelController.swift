@@ -124,6 +124,7 @@ final class FirstClickHostingView<Content: View>: NSHostingView<Content> {
 final class EdgePanelController {
     private let store: SessionStore
     private let usage: UsageStore
+    private let servers: DevServerStore
     private let settings: AppSettings
     private let state = PanelState()
     private let panel: EdgePanel
@@ -141,13 +142,15 @@ final class EdgePanelController {
     /// Height the window is currently sized for. Grows immediately, shrinks after animations settle.
     private var sizedForHeight: CGFloat = 0
 
-    init(store: SessionStore, usage: UsageStore, settings: AppSettings) {
+    init(store: SessionStore, usage: UsageStore, servers: DevServerStore, settings: AppSettings) {
         self.store = store
         self.usage = usage
+        self.servers = servers
         self.settings = settings
         panel = EdgePanel(contentRect: .zero)
 
-        let root = EdgePanelView(store: store, usage: usage, state: state,
+        let root = EdgePanelView(store: store, usage: usage, servers: servers, state: state,
+                                 onSelectTab: { [weak self] in self?.showPage($0) },
                                  onOpenSettings: { [weak self] in self?.showPage(.settings) },
                                  onCloseSettings: { [weak self] in self?.showPage(.sessions) },
                                  onShowAll: { [weak self] in self?.showAllSessions() },
@@ -160,6 +163,7 @@ final class EdgePanelController {
         panel.contentView = hosting
 
         store.onChange = { [weak self] sessions in self?.sessionsChanged(sessions) }
+        servers.onChange = { [weak self] _ in self?.contentChanged() }
         usage.onChange = { [weak self] _ in
             guard let self else { return }
             self.contentChanged()
@@ -174,7 +178,8 @@ final class EdgePanelController {
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 DispatchQueue.main.async {
-                    guard let self, NSApp.keyWindow == nil, !self.panel.isKeyWindow else { return }
+                    guard let self, self.state.page == .settings, NSApp.keyWindow == nil,
+                          !self.panel.isKeyWindow else { return }
                     self.showPage(.sessions)
                 }
             }
@@ -210,6 +215,7 @@ final class EdgePanelController {
             state.page = page
         }
         contentChanged() // window grows now / shrinks after the cascade, per the new page
+        servers.setVisible(page == .servers)
         presentation.setPinned(page == .settings)
         apply(attentionArrived: false)
 
@@ -289,6 +295,7 @@ final class EdgePanelController {
         if state.page == .settings { return PanelMetrics.settingsHeight }
         let asking = store.sessions.filter { state.pendingAttentionIDs.contains($0.id) }
         if !asking.isEmpty { return QuestionMetrics.pageHeight(asking) }
+        if state.page == .servers { return ServerMetrics.pageHeight(servers.servers.count) }
         return PanelMetrics.expandedHeight(groups: ProjectIcons.shared.groups(state.completed.visible(store.sessions)),
                                            usage: usage.usage)
     }
@@ -405,6 +412,11 @@ final class EdgePanelController {
         if target != .hidden, !panel.isVisible { panel.orderFrontRegardless() }
 
         withAnimation(animation) { state.mode = target }
+        if target != .expanded && state.page == .servers {
+            state.page = .sessions
+            servers.setVisible(false)
+            contentChanged()
+        }
 
         // Only accept clicks while open; the collapsed tab and hidden state must not
         // block clicks on whatever is underneath.

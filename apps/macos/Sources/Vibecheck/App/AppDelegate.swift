@@ -5,6 +5,7 @@ import CompanionCore
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var store: SessionStore?
     private var usage: UsageStore?
+    private var servers: DevServerStore?
     private var controller: EdgePanelController?
     private var soundPlanner = SoundPlanner()
 
@@ -16,9 +17,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let store = SessionStore(sources: sources)
         let usage = UsageStore(fetcher: args.contains("--demo") ? DemoUsage() : CodexBarCLI.locate())
         let settings = AppSettings()
-        let controller = EdgePanelController(store: store, usage: usage, settings: settings)
+        let servers = args.contains("--demo")
+            ? DevServerStore(agentPIDs: { [] }, scan: { _ in DemoData.servers }, terminate: { _, _ in })
+            : DevServerStore(agentPIDs: { store.agentPIDs }, terminate: ServerTerminator.stop)
+        let controller = EdgePanelController(store: store, usage: usage, servers: servers, settings: settings)
         self.store = store
         self.usage = usage
+        self.servers = servers
         self.controller = controller
 
         observeAgentPreferences(settings) { prefs in
@@ -32,6 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.show()
         store.start()
         usage.start()
+        servers.start()
         if args.contains("--settings") { controller.showPage(.settings) }
     }
 
@@ -54,6 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         store?.stop()
         usage?.stop()
+        servers?.stop()
     }
 }
 
@@ -91,6 +98,29 @@ enum DemoData {
             AgentSession(agent: .init(id: "cursor", name: "Cursor"), sessionID: "demo-4", cwd: cli,
                          status: .idle, task: "Fix flaky snapshot test", activity: "Done · 3 files changed",
                          startedAt: now.addingTimeInterval(-2400), updatedAt: now.addingTimeInterval(-90)),
+        ]
+    }()
+
+    static let servers: [DevServer] = {
+        let web = project("Gitrens", fallback: "work/shop-web")
+        let now = Date.now
+        return [
+            DevServer(id: "demo-next", framework: .nextjs, pid: 0, startedAt: now.addingTimeInterval(-840),
+                      ports: [3000], cwd: web + "/apps/web", claudeSessionID: "demo-2"),
+            DevServer(id: "demo-storybook", framework: .storybook, pid: 0, startedAt: now.addingTimeInterval(-3900),
+                      ports: [6006], cwd: web + "/packages/ui"),
+            DevServer(id: "demo-vite", framework: .vite, pid: 0, startedAt: now.addingTimeInterval(-300),
+                      ports: [5173], cwd: project("AgentCompanion", fallback: "work/AgentCompanion") + "/apps/site"),
+            DevServer(id: "demo-wrangler", framework: .wrangler, pid: 0, startedAt: now.addingTimeInterval(-7400),
+                      ports: [8787], cwd: web + "/workers/api"),
+            DevServer(id: "demo-django", framework: .django, pid: 0, startedAt: now.addingTimeInterval(-26000),
+                      ports: [8000], cwd: NSHomeDirectory() + "/work/billing"),
+            DevServer(id: "docker:5432", framework: .docker, pid: 0, startedAt: now.addingTimeInterval(-90000),
+                      ports: [5432]),
+            DevServer(id: "app:demo", framework: .app, pid: 0, startedAt: now.addingTimeInterval(-1500), ports: [],
+                      cwd: project("AgentCompanion", fallback: "work/AgentCompanion") + "/apps/macos/build",
+                      appPath: project("AgentCompanion", fallback: "work/AgentCompanion")
+                          + "/apps/macos/build/vibecheck.app"),
         ]
     }()
 }

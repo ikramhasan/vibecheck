@@ -1,0 +1,14 @@
+Framework logos from Simple Icons 16.35.0 (https://simpleicons.org,
+https://github.com/simple-icons/simple-icons), released under CC0 1.0 Universal,
+except where an icon's own source license is listed below:
+
+  storybook.svg  MIT
+  deno.svg       MIT
+  ruby.svg       CC BY-SA 2.5  (Yukihiro Matsumoto, https://www.ruby-lang.org/en/about/logo/)
+  php.svg        CC BY-SA 4.0  (Colin Viebrock, https://www.php.net/download-logos.php)
+
+wrangler.svg is Simple Icons' "Cloudflare Workers" icon; rails.svg is "Ruby on Rails";
+nextjs.svg is "Next.js"; node.svg is "Node.js".
+
+The logos are trademarks of their respective owners and are used only to label the
+dev servers they belong to.

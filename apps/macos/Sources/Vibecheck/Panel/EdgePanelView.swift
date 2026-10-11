@@ -29,7 +29,9 @@ struct EdgeTabShape: Shape {
 struct EdgePanelView: View {
     let store: SessionStore
     let usage: UsageStore
+    let servers: DevServerStore
     let state: PanelState
+    let onSelectTab: (PanelPage) -> Void
     let onOpenSettings: () -> Void
     let onCloseSettings: () -> Void
     let onShowAll: () -> Void
@@ -43,6 +45,7 @@ struct EdgePanelView: View {
     private var shown: [AgentSession] { state.completed.visible(store.sessions) }
     private var count: Int { shown.count }
     private var onSettings: Bool { state.page == .settings }
+    private var onServers: Bool { state.page == .servers }
     private var groups: [SessionGroup] { ProjectIcons.shared.groups(shown) }
     private var asking: [AgentSession] { store.sessions.filter { state.pendingAttentionIDs.contains($0.id) } }
     private var showsQuestions: Bool { !onSettings && !asking.isEmpty }
@@ -66,14 +69,18 @@ struct EdgePanelView: View {
             // Both pages stay mounted so their items can cascade past each other.
             ZStack(alignment: .top) {
                 ExpandedContent(groups: groups, sessionCount: count, usage: usage.usage,
+                                servers: servers.servers, sessions: store.sessions,
+                                tab: onServers ? .servers : .sessions,
                                 clearableCount: state.completed.clearableCount(store.sessions),
                                 pendingIDs: state.pendingAttentionIDs,
                                 isShown: expanded && !onSettings && !showsQuestions,
                                 hiddenSide: onSettings ? .leading : .trailing,
                                 paced: state.pageChanging,
-                                onOpenSettings: onOpenSettings, onClearCompleted: onClearCompleted,
-                                onDismiss: onDismiss, onQuit: onQuit)
-                    .frame(height: PanelMetrics.expandedHeight(groups: groups, usage: usage.usage), alignment: .top)
+                                onSelectTab: onSelectTab, onOpenSettings: onOpenSettings,
+                                onClearCompleted: onClearCompleted, onDismiss: onDismiss,
+                                onStopServer: servers.stopServer, onQuit: onQuit)
+                    .frame(height: onServers ? ServerMetrics.pageHeight(servers.servers.count)
+                           : PanelMetrics.expandedHeight(groups: groups, usage: usage.usage), alignment: .top)
                     .opacity(showsQuestions ? 0 : 1)
                     .allowsHitTesting(!onSettings && !showsQuestions)
                     .accessibilityHidden(onSettings || showsQuestions)
@@ -95,7 +102,7 @@ struct EdgePanelView: View {
             .blur(radius: expanded ? 0 : 6)
             .scaleEffect(expanded ? 1 : 0.96, anchor: .trailing)
 
-            CollapsedContent(sessions: shown, groups: groups)
+            CollapsedContent(sessions: shown, groups: groups, servers: servers.servers)
                 .frame(width: PanelMetrics.collapsedWidth)
                 .opacity(expanded ? 0 : 1)
                 .blur(radius: expanded ? 4 : 0)
@@ -116,6 +123,7 @@ struct EdgePanelView: View {
     private func pageHeight(_ groups: [SessionGroup]) -> CGFloat {
         if onSettings { return PanelMetrics.settingsHeight }
         if showsQuestions { return QuestionMetrics.pageHeight(asking) }
+        if onServers { return ServerMetrics.pageHeight(servers.servers.count) }
         return PanelMetrics.expandedHeight(groups: groups, usage: usage.usage)
     }
 }
@@ -126,13 +134,15 @@ struct EdgePanelView: View {
 private struct CollapsedContent: View {
     let sessions: [AgentSession]
     let groups: [SessionGroup]
+    let servers: [DevServer]
 
     var body: some View {
         let ordered = groups.flatMap { g in g.sessions.map { (g.project, $0) } }
         let visible = ordered.prefix(PanelMetrics.maxVisible)
         VStack(spacing: PanelMetrics.collapsedSlot - PanelMetrics.badgeSize) {
             ForEach(visible, id: \.1.id) { project, session in
-                SessionBadge(project: project, session: session)
+                SessionBadge(project: project, session: session,
+                             runsServer: servers.contains { $0.wasStarted(by: session) })
                     .transition(.scale(scale: 0.3).combined(with: .opacity))
             }
             if sessions.isEmpty {
@@ -165,9 +175,21 @@ private struct CollapsedContent: View {
 private struct SessionBadge: View {
     let project: ProjectInfo
     let session: AgentSession
+    let runsServer: Bool
 
     var body: some View {
         StatusIndicator(session: session, size: PanelMetrics.badgeSize)
+            .overlay(alignment: .topTrailing) {
+                if runsServer {
+                    PromptGlyph(size: 7, lineWidth: 1.3)
+                        .foregroundStyle(.white.opacity(0.8))
+                        .frame(width: 13, height: 13)
+                        .background(Circle().fill(Color(white: 0.11)))
+                        .overlay(Circle().strokeBorder(Color(white: 0.055), lineWidth: 1.5))
+                        .offset(x: 4, y: -4)
+                        .transition(.scale(scale: 0.3).combined(with: .opacity))
+                }
+            }
             .overlay(alignment: .bottomTrailing) {
                 AgentGlyph(agentID: session.agent.id, size: 8)
                     .frame(width: 13, height: 13)
@@ -219,6 +241,9 @@ private struct ExpandedContent: View {
     let groups: [SessionGroup]
     let sessionCount: Int
     let usage: [ProviderUsage]
+    let servers: [DevServer]
+    let sessions: [AgentSession]
+    let tab: PanelPage
     let clearableCount: Int
     let pendingIDs: Set<String>
     /// On screen: panel expanded and the sessions page selected.
@@ -226,16 +251,38 @@ private struct ExpandedContent: View {
     /// Where items rest while hidden: leading behind Settings, trailing when collapsed.
     let hiddenSide: HorizontalEdge
     let paced: Bool
+    let onSelectTab: (PanelPage) -> Void
     let onOpenSettings: () -> Void
     let onClearCompleted: () -> Void
     let onDismiss: (AgentSession) -> Void
+    let onStopServer: (DevServer) -> Void
     let onQuit: () -> Void
+
+    private var onServers: Bool { tab == .servers }
+    private var sessionsShown: Bool { isShown && !onServers }
+    private var sessionsSide: HorizontalEdge { onServers ? .leading : hiddenSide }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
                 .cascade(shown: isShown || hiddenSide == .trailing, index: 0, side: hiddenSide, paced: paced)
 
+            ZStack(alignment: .top) {
+                sessionsSection
+                    .allowsHitTesting(!onServers)
+                    .accessibilityHidden(onServers)
+                serverSection
+                    .allowsHitTesting(onServers)
+                    .accessibilityHidden(!onServers)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.top, PanelMetrics.flare)
+        .padding(.bottom, PanelMetrics.flare + 6)
+    }
+
+    private var sessionsSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
             let listHeight = PanelMetrics.listHeight(groups, hasUsage: !usage.isEmpty)
             if listHeight > 0 {
                 if PanelMetrics.listContentHeight(groups) > PanelMetrics.maxListHeight {
@@ -249,13 +296,24 @@ private struct ExpandedContent: View {
             if !usage.isEmpty {
                 UsageSection(usage: usage)
                     .frame(height: PanelMetrics.usageHeight(usage), alignment: .top)
-                    .modifier(UsageReveal(shown: isShown, index: min(groups.count, 6) + 1,
-                                          side: hiddenSide, paced: paced))
+                    .modifier(UsageReveal(shown: sessionsShown, index: min(groups.count, 6) + 1,
+                                          side: sessionsSide, paced: paced))
             }
-            Spacer(minLength: 0)
         }
-        .padding(.top, PanelMetrics.flare)
-        .padding(.bottom, PanelMetrics.flare + 6)
+    }
+
+    private var serverSection: some View {
+        let list = ServerList(servers: servers, sessions: sessions, shown: isShown && onServers,
+                              side: onServers ? hiddenSide : .trailing, paced: paced, onStop: onStopServer)
+        return Group {
+            if ServerMetrics.listContentHeight(servers.count) > PanelMetrics.maxListHeight {
+                ScrollView(.vertical) { list }
+                    .scrollIndicators(.never)
+            } else {
+                list
+            }
+        }
+        .frame(height: ServerMetrics.listHeight(servers.count), alignment: .top)
     }
 
     private var waitingCount: Int {
@@ -263,24 +321,13 @@ private struct ExpandedContent: View {
     }
 
     private var header: some View {
-        HStack {
-            Text("Agents")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white)
-            Text("\(sessionCount)")
-                .font(.system(size: 11, weight: .medium).monospacedDigit())
-                .foregroundStyle(.white.opacity(0.5))
-                .padding(.horizontal, 6).padding(.vertical, 1)
-                .background(Capsule().fill(Color.white.opacity(0.08)))
-            if waitingCount > 0 {
-                Text("\(waitingCount) waiting")
-                    .font(.system(size: 11, weight: .medium).monospacedDigit())
-                    .foregroundStyle(Color.orange)
-                    .padding(.horizontal, 6).padding(.vertical, 1)
-                    .background(Capsule().fill(Color.orange.opacity(0.14)))
+        HStack(spacing: 4) {
+            TabButton(title: "Agents", count: sessionCount, waiting: waitingCount, selected: !onServers) {
+                onSelectTab(.sessions)
             }
+            TabButton(title: "Servers", count: servers.count, selected: onServers) { onSelectTab(.servers) }
             Spacer()
-            if clearableCount > 0 {
+            if clearableCount > 0 && !onServers {
                 HeaderButton(systemImage: "checkmark.circle", label: "Clear completed from the edge tab",
                              action: onClearCompleted)
             }
@@ -288,7 +335,8 @@ private struct ExpandedContent: View {
             HeaderButton(systemImage: "power", label: "Quit vibecheck", action: onQuit)
         }
         .frame(height: PanelMetrics.headerHeight)
-        .padding(.horizontal, 16)
+        .padding(.leading, 10)
+        .padding(.trailing, 16)
     }
 
     private var list: some View {
@@ -298,18 +346,20 @@ private struct ExpandedContent: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.white.opacity(0.4))
                     .frame(maxWidth: .infinity, minHeight: PanelMetrics.emptyListHeight)
+                    .cascade(shown: sessionsShown, index: 1, side: sessionsSide, paced: paced)
             }
             ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
                 if index > 0 {
                     Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1)
                         .padding(.horizontal, 18)
                         .frame(height: PanelMetrics.groupDivider)
+                        .cascade(shown: sessionsShown, index: index, side: sessionsSide, paced: paced)
                 }
-                ProjectGroupView(group: group, pendingIDs: pendingIDs, onDismiss: onDismiss)
+                ProjectGroupView(group: group, pendingIDs: pendingIDs, servers: servers, onDismiss: onDismiss)
                     .frame(height: PanelMetrics.groupHeight(group), alignment: .top)
                     // Small stagger so groups settle in after the card lands, and leave
                     // one by one when Settings takes over.
-                    .cascade(shown: isShown, index: index + 1, side: hiddenSide, paced: paced)
+                    .cascade(shown: sessionsShown, index: index + 1, side: sessionsSide, paced: paced)
             }
         }
     }
@@ -337,6 +387,47 @@ private struct HeaderButton: View {
     }
 }
 
+private struct TabButton: View {
+    let title: String
+    let count: Int
+    var waiting = 0
+    let selected: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white.opacity(selected ? 1 : hovering ? 0.7 : 0.42))
+                if waiting > 0 {
+                    Text("\(waiting) waiting")
+                        .font(.system(size: 11, weight: .medium).monospacedDigit())
+                        .foregroundStyle(Color.orange)
+                        .padding(.horizontal, 6).padding(.vertical, 1)
+                        .background(Capsule().fill(Color.orange.opacity(0.14)))
+                } else {
+                    Text("\(count)")
+                        .font(.system(size: 11, weight: .medium).monospacedDigit())
+                        .foregroundStyle(.white.opacity(selected ? 0.5 : 0.35))
+                        .padding(.horizontal, 6).padding(.vertical, 1)
+                        .background(Capsule().fill(Color.white.opacity(selected ? 0.08 : 0.05)))
+                }
+            }
+            .fixedSize()
+            .padding(.horizontal, 6)
+            .frame(height: 26)
+            .background(RoundedRectangle(cornerRadius: 7).fill(Color.white.opacity(hovering && !selected ? 0.05 : 0)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { h in withAnimation(.easeOut(duration: 0.12)) { hovering = h } }
+        .accessibilityLabel(waiting > 0 ? "\(title), \(count), \(waiting) waiting" : "\(title), \(count)")
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+}
+
 private struct DismissButton: View {
     let action: () -> Void
     @State private var hovering = false
@@ -361,6 +452,7 @@ private struct DismissButton: View {
 private struct ProjectGroupView: View {
     let group: SessionGroup
     let pendingIDs: Set<String>
+    let servers: [DevServer]
     let onDismiss: (AgentSession) -> Void
 
     var body: some View {
@@ -380,22 +472,18 @@ private struct ProjectGroupView: View {
             }
             .frame(height: PanelMetrics.groupHeader)
             .padding(.horizontal, 12)
-            .help(Self.abbreviate(group.project.root))
+            .help(ProjectPath.abbreviate(group.project.root))
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
 
             ForEach(group.sessions) { session in
                 SessionLine(session: session, highlighted: pendingIDs.contains(session.id),
+                            servers: servers.filter { $0.wasStarted(by: session) },
                             onDismiss: { onDismiss(session) })
             }
         }
         .padding(.vertical, PanelMetrics.groupPadding / 2)
         .padding(.horizontal, 6)
-    }
-
-    static func abbreviate(_ path: String) -> String {
-        let home = NSHomeDirectory()
-        return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
     }
 }
 
@@ -404,6 +492,7 @@ private struct ProjectGroupView: View {
 private struct SessionLine: View {
     let session: AgentSession
     let highlighted: Bool
+    let servers: [DevServer]
     let onDismiss: () -> Void
     @State private var hovering = false
     @State private var target: JumpTarget?
@@ -421,6 +510,12 @@ private struct SessionLine: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Spacer(minLength: 6)
+                if !servers.isEmpty {
+                    PromptGlyph(size: 10, lineWidth: 1.4)
+                        .foregroundStyle(.white.opacity(0.45))
+                        .help(servers.map(\.summary).joined(separator: "\n"))
+                        .transition(.opacity)
+                }
                 if let context = session.context {
                     ContextGauge(usage: context)
                 }
@@ -488,7 +583,10 @@ private struct SessionLine: View {
         parts.append([StatusPresentation(session).word, session.activity].compactMap { $0 }.joined(separator: " · "))
         if session.status == .needsAttention { parts.append(StatusPresentation.task(session)) }
         if let context = session.context { parts.append(ContextGauge.summary(context)) }
-        parts.append(ProjectGroupView.abbreviate(session.cwd))
+        if !servers.isEmpty {
+            parts.append("Running " + servers.map(\.summary).joined(separator: ", "))
+        }
+        parts.append(ProjectPath.abbreviate(session.cwd))
         if let app = target?.appName { parts.append("Click to open \(app)") }
         return parts.joined(separator: "\n")
     }

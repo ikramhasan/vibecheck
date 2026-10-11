@@ -3,6 +3,7 @@ import SwiftUI
 /// Which page the expanded panel shows.
 enum PanelPage: Equatable {
     case sessions
+    case servers
     case settings
 }
 

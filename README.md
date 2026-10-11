@@ -78,6 +78,18 @@ pi install "$PWD/integrations/pi"     # uninstall: pi remove "$PWD/integrations/
   3 seconds, so several sessions finishing together make one sound.
 - Clicking a session selects its exact tab in Terminal or iTerm2 (and its tmux pane);
   other apps are brought forward.
+- The Servers tab lists local dev servers (Next.js, Vite, Astro, Wrangler, Storybook,
+  Nuxt, Django, Flask, FastAPI, Rails, plain Node/Bun/Deno/Python/Ruby/PHP, and Docker
+  ports) with their project and uptime. Click a row to open it; hover for copy URL,
+  reveal in Finder and stop (click twice). Stop sends SIGTERM to the server's own
+  process tree, then SIGKILL after 3 seconds, and never signals an agent process.
+  Sessions that started a server show a terminal icon. Mac apps running from inside a
+  git repository (like `apps/macos/build/vibecheck.app`) are listed too: click to bring
+  one forward, or quit it the way ⌘Q would. Apps that host an agent session can't be
+  quit from here. Scans run every 10 seconds, or every 2 seconds while the tab is open,
+  using libproc only.
+- Framework logos are from [Simple Icons](https://simpleicons.org) (CC0; see
+  `apps/macos/Sources/Vibecheck/Resources/FrameworkIcons/LICENSE`).
 
 ## Tests
 

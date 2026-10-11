@@ -1,0 +1,242 @@
+import AppKit
+import CompanionCore
+import SwiftUI
+
+enum ServerMetrics {
+    static let line: CGFloat = 24
+    static let detailLine: CGFloat = 16
+    static let row: CGFloat = line + detailLine + 6
+    static let listPadding: CGFloat = 8
+
+    static func listContentHeight(_ count: Int) -> CGFloat {
+        count == 0 ? PanelMetrics.emptyListHeight : CGFloat(count) * row + listPadding
+    }
+
+    static func listHeight(_ count: Int) -> CGFloat {
+        min(listContentHeight(count), PanelMetrics.maxListHeight)
+    }
+
+    static func pageHeight(_ count: Int) -> CGFloat {
+        PanelMetrics.flare * 2 + PanelMetrics.headerHeight + listHeight(count) + 12
+    }
+}
+
+struct ServerList: View {
+    let servers: [DevServer]
+    let sessions: [AgentSession]
+    let shown: Bool
+    let side: HorizontalEdge
+    let paced: Bool
+    let onStop: (DevServer) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if servers.isEmpty {
+                Text("No dev servers running")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.4))
+                    .frame(maxWidth: .infinity, minHeight: PanelMetrics.emptyListHeight)
+                    .cascade(shown: shown, index: 1, side: side, paced: paced)
+            }
+            ForEach(Array(servers.enumerated()), id: \.element.id) { index, server in
+                ServerRow(server: server, session: sessions.first(where: server.wasStarted(by:)),
+                          onStop: { onStop(server) })
+                    .frame(height: ServerMetrics.row)
+                    .cascade(shown: shown, index: index + 1, side: side, paced: paced)
+            }
+        }
+        .padding(.vertical, ServerMetrics.listPadding / 2)
+        .padding(.horizontal, 6)
+    }
+}
+
+private struct ServerRow: View {
+    let server: DevServer
+    let session: AgentSession?
+    let onStop: () -> Void
+    @State private var hovering = false
+    @State private var confirmingStop = false
+    @State private var copied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                ServerIcon(server: server, size: 16)
+                    .frame(width: 18)
+                Text(server.name)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(1)
+                Text(server.address ?? server.framework.displayName)
+                    .font(.system(size: 11).monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.5))
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+                trailing
+            }
+            .frame(height: ServerMetrics.line)
+
+            HStack(spacing: 5) {
+                if let session {
+                    AgentGlyph(agentID: session.agent.id, size: 10)
+                }
+                Text(projectLabel)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.42))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            .padding(.leading, 26)
+            .frame(height: ServerMetrics.detailLine, alignment: .top)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 3)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.white.opacity(hovering ? 0.05 : 0))
+        )
+        .contentShape(Rectangle())
+        .onHover { h in
+            withAnimation(.easeOut(duration: 0.12)) {
+                hovering = h
+                if !h { confirmingStop = false }
+            }
+        }
+        .onTapGesture(perform: open)
+        .help(tooltip)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint(server.url == nil ? "Brings the app forward" : "Opens it in your browser")
+        .accessibilityAction(.default) { open() }
+        .accessibilityActions {
+            if server.url != nil { Button("Copy URL") { copy() } }
+            if revealPath != nil { Button("Reveal in Finder") { reveal() } }
+            if server.canStop { Button(server.appPath == nil ? "Stop" : "Quit") { onStop() } }
+        }
+    }
+
+    private var accessibilityText: String {
+        "\(server.summary), \(projectLabel)"
+    }
+
+    @ViewBuilder private var trailing: some View {
+        if hovering {
+            HStack(spacing: 2) {
+                if server.url != nil {
+                    RowAction(systemImage: copied ? "checkmark" : "doc.on.doc", label: "Copy URL", action: copy)
+                }
+                if revealPath != nil {
+                    RowAction(systemImage: "folder", label: server.appPath == nil ? "Reveal project in Finder"
+                              : "Reveal app in Finder", action: reveal)
+                }
+                RowAction(systemImage: "arrow.up.right",
+                          label: server.url == nil ? "Bring to front" : "Open in browser", action: open)
+                if server.canStop { stopButton }
+            }
+            .transition(.opacity)
+        } else {
+            TimelineView(.periodic(from: .now, by: 30)) { context in
+                Text(ElapsedFormat.short(since: server.startedAt, now: context.date))
+                    .font(.system(size: 11).monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.38))
+            }
+            .transition(.opacity)
+        }
+    }
+
+    @ViewBuilder private var stopButton: some View {
+        if confirmingStop {
+            Button {
+                confirmingStop = false
+                onStop()
+            } label: {
+                Text("Stop")
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 7)
+                    .frame(height: 18)
+                    .background(Capsule().fill(Color(red: 0.86, green: 0.27, blue: 0.25)))
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .help(server.appPath == nil ? "Click again to stop this server" : "Click again to quit this app")
+            .accessibilityLabel("Confirm stop")
+            .transition(.scale(scale: 0.8).combined(with: .opacity))
+        } else {
+            RowAction(systemImage: "stop.fill", label: server.appPath == nil ? "Stop" : "Quit") {
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) { confirmingStop = true }
+            }
+        }
+    }
+
+    private var projectLabel: String {
+        guard let cwd = server.cwd else { return server.framework == .docker ? "Container" : "Unknown folder" }
+        let project = ProjectIcons.shared.project(for: cwd)
+        guard cwd.hasPrefix(project.root + "/") else { return project.name }
+        return project.name + cwd.dropFirst(project.root.count)
+    }
+
+    private var tooltip: String {
+        var lines = server.ports.isEmpty ? [] : [server.ports.map { "localhost:\($0)" }.joined(separator: ", ")]
+        if let path = server.appPath ?? server.cwd { lines.append(ProjectPath.abbreviate(path)) }
+        if let session { lines.append("Started by \(session.agent.name): \(StatusPresentation.headline(session))") }
+        if server.hostsAgent { lines.append("Runs an agent session, so it can't be quit from here") }
+        lines.append(server.url == nil ? "Click to bring it to the front" : "Click to open in your browser")
+        return lines.joined(separator: "\n")
+    }
+
+    private var revealPath: String? { server.appPath ?? server.cwd }
+
+    private func open() {
+        if let url = server.url {
+            NSWorkspace.shared.open(url)
+        } else {
+            NSRunningApplication(processIdentifier: server.pid)?.activate()
+        }
+    }
+
+    private func copy() {
+        guard let url = server.url else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(url.absoluteString, forType: .string)
+        withAnimation(.easeOut(duration: 0.12)) { copied = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            withAnimation(.easeOut(duration: 0.12)) { copied = false }
+        }
+    }
+
+    private func reveal() {
+        guard let revealPath else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: revealPath)])
+    }
+}
+
+private struct RowAction: View {
+    let systemImage: String
+    let label: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 9.5, weight: .semibold))
+                .foregroundStyle(.white.opacity(hovering ? 0.9 : 0.5))
+                .frame(width: 20, height: 20)
+                .background(RoundedRectangle(cornerRadius: 5).fill(Color.white.opacity(hovering ? 0.1 : 0)))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { h in withAnimation(.easeOut(duration: 0.12)) { hovering = h } }
+        .help(label)
+        .accessibilityLabel(label)
+    }
+}
+
+enum ProjectPath {
+    static func abbreviate(_ path: String) -> String {
+        let home = NSHomeDirectory()
+        return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
+    }
+}

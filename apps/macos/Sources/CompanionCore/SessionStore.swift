@@ -31,6 +31,8 @@ public final class SessionStore {
     /// Every agent seen so far, including hidden ones, so Settings can list them.
     public private(set) var seenAgents: [AgentSession.AgentInfo] = []
 
+    @ObservationIgnored public private(set) var agentPIDs: Set<Int32> = []
+
     public func setHiddenAgents(_ ids: Set<String>) {
         guard ids != hiddenAgents else { return }
         hiddenAgents = ids
@@ -42,6 +44,7 @@ public final class SessionStore {
 
     private func recompute() {
         var merged: [String: AgentSession] = [:]
+        agentPIDs = Set(bySource.values.joined().compactMap(\.pid))
         for list in sources.compactMap({ bySource[ObjectIdentifier($0)] }) {
             for s in list where !seenAgents.contains(where: { $0.id == s.agent.id }) {
                 seenAgents.append(s.agent)

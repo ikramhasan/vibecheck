@@ -98,7 +98,10 @@ enum AgentAppearance {
     ]
 
     static func tint(for id: String) -> Color {
-        guard let hex = brandHex[id] else { return .white.opacity(0.7) }
+        brandHex[id].map(brandColor) ?? .white.opacity(0.7)
+    }
+
+    static func brandColor(_ hex: UInt32) -> Color {
         let c = Color(red: Double((hex >> 16) & 0xFF) / 255,
                       green: Double((hex >> 8) & 0xFF) / 255,
                       blue: Double(hex & 0xFF) / 255)
@@ -110,7 +113,7 @@ enum AgentAppearance {
 
     /// SwiftPM's resource bundle: in `Contents/Resources` of the .app, or next to the
     /// binary under `swift run`. Resolved by hand because `Bundle.module` traps when absent.
-    private static let iconBundle: Bundle? = {
+    static let iconBundle: Bundle? = {
         let name = "Vibecheck_Vibecheck.bundle"
         let candidates = [Bundle.main.resourceURL, Bundle.main.executableURL?.deletingLastPathComponent()]
         return candidates.lazy.compactMap { $0?.appending(path: name) }.compactMap(Bundle.init(url:)).first

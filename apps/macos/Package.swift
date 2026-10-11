@@ -10,7 +10,7 @@ let package = Package(
         // The macOS app: edge panel window + SwiftUI views.
         .executableTarget(name: "Vibecheck", dependencies: ["CompanionCore"],
                           exclude: ["Orbs/LICENSE"],
-                          resources: [.copy("Resources/ProviderIcons")]),
+                          resources: [.copy("Resources/ProviderIcons"), .copy("Resources/FrameworkIcons")]),
         .testTarget(name: "CompanionCoreTests", dependencies: ["CompanionCore"], resources: [.copy("Fixtures")]),
     ]
 )

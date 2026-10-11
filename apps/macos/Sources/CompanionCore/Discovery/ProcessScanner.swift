@@ -29,7 +29,36 @@ public struct ProcessSnapshot: Equatable, Sendable {
     }
 }
 
+public struct ProcessEntry: Equatable, Sendable {
+    public var pid: Int32
+    public var parentPID: Int32
+    public var name: String
+    public var startedAt: Date
+
+    public init(pid: Int32, parentPID: Int32, name: String, startedAt: Date = .distantPast) {
+        self.pid = pid
+        self.parentPID = parentPID
+        self.name = name
+        self.startedAt = startedAt
+    }
+}
+
 public enum ProcessScanner {
+    public static func userProcesses() -> [ProcessEntry] {
+        let uid = getuid()
+        return allPIDs().compactMap { pid in
+            guard let info = bsdInfo(pid), info.pbi_uid == uid else { return nil }
+            return ProcessEntry(pid: pid, parentPID: Int32(info.pbi_ppid), name: cString(info.pbi_comm),
+                                startedAt: Date(timeIntervalSince1970: TimeInterval(info.pbi_start_tvsec)))
+        }
+    }
+
+    public static func entry(pid: Int32) -> ProcessEntry? {
+        guard let info = bsdInfo(pid), info.pbi_uid == getuid() else { return nil }
+        return ProcessEntry(pid: pid, parentPID: Int32(info.pbi_ppid), name: cString(info.pbi_comm),
+                            startedAt: Date(timeIntervalSince1970: TimeInterval(info.pbi_start_tvsec)))
+    }
+
     public static func processes(named names: Set<String>) -> [ProcessSnapshot] {
         let uid = getuid()
         return allPIDs().compactMap { pid in
@@ -46,18 +75,26 @@ public enum ProcessScanner {
     }
 
     public static func openFiles(pid: Int32) -> [String] {
-        let size = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, nil, 0)
-        guard size > 0 else { return [] }
-        var fds = [proc_fdinfo](repeating: proc_fdinfo(), count: Int(size) / MemoryLayout<proc_fdinfo>.stride)
-        let filled = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, &fds, size)
-        guard filled > 0 else { return [] }
-        return fds.prefix(Int(filled) / MemoryLayout<proc_fdinfo>.stride).compactMap { fd in
+        fileDescriptors(pid).compactMap { fd in
             guard fd.proc_fdtype == PROX_FDTYPE_VNODE else { return nil }
             var info = vnode_fdinfowithpath()
             let infoSize = Int32(MemoryLayout<vnode_fdinfowithpath>.size)
             guard proc_pidfdinfo(pid, fd.proc_fd, PROC_PIDFDVNODEPATHINFO, &info, infoSize) == infoSize else { return nil }
             return cString(info.pvip.vip_path)
         }
+    }
+
+    public static func listeningPorts(pid: Int32) -> [UInt16] {
+        let ports = fileDescriptors(pid).compactMap { fd -> UInt16? in
+            guard fd.proc_fdtype == PROX_FDTYPE_SOCKET else { return nil }
+            var info = socket_fdinfo()
+            let infoSize = Int32(MemoryLayout<socket_fdinfo>.size)
+            guard proc_pidfdinfo(pid, fd.proc_fd, PROC_PIDFDSOCKETINFO, &info, infoSize) == infoSize,
+                  info.psi.soi_kind == SOCKINFO_TCP,
+                  info.psi.soi_proto.pri_tcp.tcpsi_state == TSI_S_LISTEN else { return nil }
+            return UInt16(bigEndian: UInt16(truncatingIfNeeded: info.psi.soi_proto.pri_tcp.tcpsi_ini.insi_lport))
+        }
+        return Array(Set(ports)).sorted()
     }
 
     public static func executablePath(pid: Int32) -> String? {
@@ -75,6 +112,15 @@ public enum ProcessScanner {
         return ProcessSnapshot(pid: pid, name: name, arguments: arguments, environment: environment,
                                cwd: cwd(pid), tty: tty(info.e_tdev),
                                startedAt: Date(timeIntervalSince1970: TimeInterval(info.pbi_start_tvsec)))
+    }
+
+    private static func fileDescriptors(_ pid: Int32) -> [proc_fdinfo] {
+        let size = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, nil, 0)
+        guard size > 0 else { return [] }
+        var fds = [proc_fdinfo](repeating: proc_fdinfo(), count: Int(size) / MemoryLayout<proc_fdinfo>.stride)
+        let filled = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, &fds, size)
+        guard filled > 0 else { return [] }
+        return Array(fds.prefix(Int(filled) / MemoryLayout<proc_fdinfo>.stride))
     }
 
     private static func allPIDs() -> [Int32] {
