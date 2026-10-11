@@ -156,7 +156,7 @@ final class TranscriptTracker {
         Task.detached(priority: .utility) {
             var file = snapshot
             let read = file.readNewLines()
-            let modifiedAt = (try? file.url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+            let modifiedAt = file.modificationDate
             let (restarted, lines): (Bool, [Data]) = switch read {
             case .appended(let lines): (false, lines)
             case .restarted(let lines): (true, lines)

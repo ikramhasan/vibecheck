@@ -11,6 +11,10 @@ public struct TranscriptFile: Sendable {
         self.url = url
     }
 
+    public var modificationDate: Date? {
+        (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
+    }
+
     public enum Read: Equatable {
         case appended([Data])
         case restarted([Data])

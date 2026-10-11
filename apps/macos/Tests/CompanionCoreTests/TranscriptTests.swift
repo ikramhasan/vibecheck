@@ -210,6 +210,15 @@ private func timeline(_ path: String, _ format: TranscriptFormat) throws -> Sess
         try "new\n".write(to: url, atomically: true, encoding: .utf8)
         #expect(file.readNewLines() == .restarted([Data("new".utf8)]))
     }
+
+    @Test func modificationDateFollowsLaterWrites() throws {
+        let url = try tempFile("one\n")
+        let file = TranscriptFile(url: url)
+        let first = try #require(file.modificationDate)
+        let later = first.addingTimeInterval(60)
+        try FileManager.default.setAttributes([.modificationDate: later], ofItemAtPath: url.path)
+        #expect(file.modificationDate == later)
+    }
 }
 
 @Suite struct SettleScheduleTests {
