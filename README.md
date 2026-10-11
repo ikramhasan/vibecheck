@@ -66,6 +66,8 @@ pi install "$PWD/integrations/pi"     # uninstall: pi remove "$PWD/integrations/
 - Sessions running: small tab on the right edge; hover to expand.
 - A session needs attention (question, permission, input): expands by itself and
   stays open until you've hovered over it. A new request re-opens it.
+- Notifications (Settings → Notifications): needs input, turn finished, blocked or
+  failed, after a configurable delay. Clicking one jumps to the session.
 
 ## Tests
 

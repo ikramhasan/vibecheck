@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var store: SessionStore?
     private var usage: UsageStore?
     private var controller: EdgePanelController?
+    private var notifier: AlertNotifier?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let args = CommandLine.arguments
@@ -24,6 +25,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             store.setHiddenAgents(prefs.hiddenStatus)
             usage.setEnabled(prefs.usage)
         }
+        let notifier = AlertNotifier { id in
+            if let session = store.sessions.first(where: { $0.id == id }) { SessionJumper.jump(to: session) }
+        }
+        self.notifier = notifier
+        observeAlerts(store: store, settings: settings) { sessions, alerts in
+            notifier.update(sessions, settings: alerts)
+        }
         controller.show()
         store.start()
         usage.start()
@@ -37,6 +45,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Task { @MainActor in self?.observeAgentPreferences(settings, apply) }
         }
         apply(prefs)
+    }
+
+    private func observeAlerts(store: SessionStore, settings: AppSettings,
+                               _ apply: @escaping @MainActor ([AgentSession], AlertSettings) -> Void) {
+        let (sessions, alerts) = withObservationTracking { (store.sessions, settings.alerts) } onChange: { [weak self] in
+            Task { @MainActor in self?.observeAlerts(store: store, settings: settings, apply) }
+        }
+        apply(sessions, alerts)
     }
 
     func applicationWillTerminate(_ notification: Notification) {

@@ -27,12 +27,19 @@ struct SettingsPage: View {
                     }
                     .cascade(shown: isShown, index: 1, side: .trailing, paced: paced)
 
+                    SettingsSection("Notifications",
+                                    footer: "Sent when a session is still waiting after the delay. "
+                                        + "Permission prompts need hooks; questions and finished turns don't.") {
+                        AlertSettingsRows(alerts: $settings.alerts)
+                    }
+                    .cascade(shown: isShown, index: 2, side: .trailing, paced: paced)
+
                     SettingsSection("Loading indicator",
                                     footer: "Shown while an agent is working. Agents without an override use this.",
                                     grouped: false) {
                         LoaderGallery(selection: $settings.loader.global)
                     }
-                    .cascade(shown: isShown, index: 2, side: .trailing, paced: paced)
+                    .cascade(shown: isShown, index: 3, side: .trailing, paced: paced)
 
                     if !agents.isEmpty {
                         SettingsSection("Per agent") {
@@ -43,7 +50,7 @@ struct SettingsPage: View {
                                 }
                             }
                         }
-                        .cascade(shown: isShown, index: 3, side: .trailing, paced: paced)
+                        .cascade(shown: isShown, index: 4, side: .trailing, paced: paced)
                     }
                 }
                 .padding(.horizontal, 14)
@@ -312,6 +319,51 @@ private struct AddAgentMenu: View {
         return usage.catalog.filter {
             !added.contains($0.id) && (q.isEmpty || $0.name.lowercased().contains(q) || $0.id.contains(q))
         }
+    }
+}
+
+// MARK: - Notifications
+
+private struct AlertSettingsRows: View {
+    @Binding var alerts: AlertSettings
+
+    var body: some View {
+        row("Notify after") {
+            Picker("Notify after", selection: $alerts.delaySeconds) {
+                ForEach(AlertSettings.delayChoices, id: \.self) { seconds in
+                    Text(seconds == 0 ? "Instantly" : seconds < 60 ? "\(seconds) seconds" : "1 minute").tag(seconds)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .controlSize(.small)
+            .fixedSize()
+        }
+        RowDivider()
+        toggle("Agent needs input", isOn: $alerts.needsInput)
+        RowDivider()
+        toggle("Turn finished", isOn: $alerts.finished)
+        RowDivider()
+        toggle("Blocked or failed", isOn: $alerts.problems)
+    }
+
+    private func toggle(_ title: String, isOn: Binding<Bool>) -> some View {
+        row(title) {
+            Toggle(title, isOn: isOn)
+                .labelsHidden()
+                .toggleStyle(.switch).controlSize(.mini)
+        }
+    }
+
+    private func row<Control: View>(_ title: String, @ViewBuilder control: () -> Control) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.9))
+            Spacer(minLength: 6)
+            control()
+        }
+        .frame(height: 30)
     }
 }
 
