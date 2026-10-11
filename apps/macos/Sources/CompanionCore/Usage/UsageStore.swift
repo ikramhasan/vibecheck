@@ -85,7 +85,7 @@ public final class UsageStore {
 
     private func rebuild() {
         let previous = Dictionary(usage.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        let next = enabled.map { id in
+        let next = enabled.map { id -> ProviderUsage in
             var u = previous[id] ?? ProviderUsage(id: id, name: id)
             u.name = name(for: id) ?? u.name
             return u
