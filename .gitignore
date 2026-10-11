@@ -31,3 +31,6 @@ npm-debug.log*
 
 # Downloaded by apps/macos/scripts/fetch-codexbar.sh
 /apps/macos/vendor/
+
+# Third-party projects cloned for study (see AGENTS.md)
+/reference/
