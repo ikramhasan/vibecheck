@@ -134,6 +134,7 @@ final class EdgePanelController {
     /// Time the pointer has to stay away before collapsing — avoids flicker at the boundary.
     private let collapseDelay: TimeInterval = 0.28
     private var leftAt: Date?
+    private var lastPointerOverCard: NSPoint?
     /// Height the window is currently sized for. Grows immediately, shrinks after animations settle.
     private var sizedForHeight: CGFloat = 0
 
@@ -353,7 +354,9 @@ final class EdgePanelController {
             inside = tab.contains(mouse) || edgeStrip.contains(mouse)
         }
 
-        if inside {
+        let stayedPutAfterCardShrank = pointerInside && mouse == lastPointerOverCard
+        if inside || stayedPutAfterCardShrank {
+            lastPointerOverCard = mouse
             leftAt = nil
             setHovering(true)
         } else if let leftAt {
