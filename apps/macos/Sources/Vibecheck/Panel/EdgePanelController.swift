@@ -32,14 +32,8 @@ enum PanelMetrics {
     static let emptyListHeight: CGFloat = 56
     static let maxListHeight: CGFloat = 380
 
-    static func hasDetail(_ session: AgentSession) -> Bool {
-        StatusPresentation.detail(session) != nil
-    }
-
     static func groupHeight(_ group: SessionGroup) -> CGFloat {
-        groupHeader + groupPadding + group.sessions.reduce(0) {
-            $0 + sessionLine + (hasDetail($1) ? detailLine : 0)
-        }
+        groupHeader + groupPadding + CGFloat(group.sessions.count) * (sessionLine + detailLine)
     }
 
     static func listContentHeight(_ groups: [SessionGroup]) -> CGFloat {
@@ -88,6 +82,7 @@ final class PanelState {
     var pageChanging = false
     /// Session ids whose attention request hasn't been seen yet (highlighted rows).
     var pendingAttentionIDs: Set<String> = []
+    var serversOfSessionID: String?
     var completed = CompletedFilter()
 }
 
@@ -156,6 +151,7 @@ final class EdgePanelController {
                                  onShowAll: { [weak self] in self?.showAllSessions() },
                                  onClearCompleted: { [weak self] in self?.clearCompleted() },
                                  onDismiss: { [weak self] in self?.dismiss($0) },
+                                 onShowServers: { [weak self] in self?.showServers(of: $0) },
                                  onQuit: { NSApp.terminate(nil) })
             .environment(settings)
         let hosting = FirstClickHostingView(rootView: root)
@@ -207,6 +203,7 @@ final class EdgePanelController {
     /// and menus (which sit outside the card) don't make it collapse.
     func showPage(_ page: PanelPage) {
         guard page != state.page else { return }
+        state.serversOfSessionID = nil
         pageSettleWork?.cancel()
         state.pageChanging = true
 
@@ -229,6 +226,11 @@ final class EdgePanelController {
         let work = DispatchWorkItem { [weak self] in self?.state.pageChanging = false }
         pageSettleWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
+    }
+
+    private func showServers(of session: AgentSession) {
+        showPage(.servers)
+        state.serversOfSessionID = session.id
     }
 
     private func clearCompleted() {
@@ -414,6 +416,7 @@ final class EdgePanelController {
         withAnimation(animation) { state.mode = target }
         if target != .expanded && state.page == .servers {
             state.page = .sessions
+            state.serversOfSessionID = nil
             servers.setVisible(false)
             contentChanged()
         }

@@ -24,6 +24,7 @@ enum ServerMetrics {
 struct ServerList: View {
     let servers: [DevServer]
     let sessions: [AgentSession]
+    let highlightedSessionID: String?
     let shown: Bool
     let side: HorizontalEdge
     let paced: Bool
@@ -39,7 +40,9 @@ struct ServerList: View {
                     .cascade(shown: shown, index: 1, side: side, paced: paced)
             }
             ForEach(Array(servers.enumerated()), id: \.element.id) { index, server in
-                ServerRow(server: server, session: sessions.first(where: server.wasStarted(by:)),
+                let session = sessions.first(where: server.wasStarted(by:))
+                ServerRow(server: server, session: session,
+                          highlighted: session.map { $0.id == highlightedSessionID } ?? false,
                           onStop: { onStop(server) })
                     .frame(height: ServerMetrics.row)
                     .cascade(shown: shown, index: index + 1, side: side, paced: paced)
@@ -53,6 +56,7 @@ struct ServerList: View {
 private struct ServerRow: View {
     let server: DevServer
     let session: AgentSession?
+    let highlighted: Bool
     let onStop: () -> Void
     @State private var hovering = false
     @State private var confirmingStop = false
@@ -93,7 +97,7 @@ private struct ServerRow: View {
         .padding(.vertical, 3)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.white.opacity(hovering ? 0.05 : 0))
+                .fill(highlighted ? Color.orange.opacity(0.1) : Color.white.opacity(hovering ? 0.05 : 0))
         )
         .contentShape(Rectangle())
         .onHover { h in
