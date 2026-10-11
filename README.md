@@ -12,10 +12,33 @@ Data flow: agent integration → `integrations/core` reporter → status file �
 `StatusDirectorySource` → `SessionStore` → panel. See `integrations/core/README.md`
 to add another agent.
 
+## Install
+
+```bash
+brew install --cask ikramhasan/tap/vibecheck
+```
+
+Requires macOS 26 on Apple Silicon. Install through Homebrew rather than downloading the
+zip by hand: the app isn't notarized, and the cask clears the quarantine flag so it opens
+without a Gatekeeper warning.
+
+## Release
+
+Push a version tag. `.github/workflows/release.yml` builds the app, publishes the zip as a
+release of [ikramhasan/homebrew-tap](https://github.com/ikramhasan/homebrew-tap) and updates
+the cask's version and sha256 there.
+
+```bash
+git tag v0.3.0 && git push origin v0.3.0
+```
+
+The workflow needs the `HOMEBREW_TAP_TOKEN` secret: a fine-grained token with Contents
+read/write on `homebrew-tap`.
+
 ## Build & run
 
 ```bash
-apps/macos/scripts/bundle.sh                       # build the .app
+apps/macos/scripts/bundle.sh [version]             # build the .app and zip (version defaults to 0.0.0)
 open apps/macos/build/vibecheck.app                # live data
 ```
 

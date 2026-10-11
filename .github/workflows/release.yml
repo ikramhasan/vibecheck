@@ -1,0 +1,45 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: macos-26
+    env:
+      TAP: ikramhasan/homebrew-tap
+      GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "ZIP=$PWD/apps/macos/build/vibecheck-$VERSION.zip" >> "$GITHUB_ENV"
+          apps/macos/scripts/bundle.sh "$VERSION"
+
+      - name: Publish the zip as a release of the tap
+        run: |
+          gh release create "$GITHUB_REF_NAME" "$ZIP" \
+            --repo "$TAP" \
+            --title "vibecheck $VERSION" \
+            --notes "Install with \`brew install --cask ikramhasan/tap/vibecheck\`."
+
+      - name: Point the cask at the new release
+        run: |
+          SHA256="$(shasum -a 256 "$ZIP" | awk '{print $1}')"
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/${TAP}.git" tap
+          cd tap
+          sed -i '' \
+            -e "s/^  version \".*\"/  version \"${VERSION}\"/" \
+            -e "s/^  sha256 \".*\"/  sha256 \"${SHA256}\"/" \
+            Casks/vibecheck.rb
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "vibecheck ${VERSION}"
+          git push

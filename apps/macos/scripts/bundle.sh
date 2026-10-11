@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# Builds a release binary and wraps it in apps/macos/build/vibecheck.app
+# Builds a release binary, wraps it in apps/macos/build/vibecheck.app and zips it.
+# Usage: bundle.sh [version]   (defaults to 0.0.0 for local builds)
 set -euo pipefail
 cd "$(dirname "$0")/.."
+
+VERSION="${1:-0.0.0}"
 
 swift build -c release
 scripts/fetch-codexbar.sh
@@ -29,8 +32,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleExecutable</key><string>Vibecheck</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.3.0</string>
-  <key>CFBundleVersion</key><string>3</string>
+  <key>CFBundleShortVersionString</key><string>${VERSION}</string>
+  <key>CFBundleVersion</key><string>${VERSION}</string>
   <key>LSMinimumSystemVersion</key><string>26.0</string>
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
@@ -45,3 +48,9 @@ codesign --force --sign - "$APP/Contents/Helpers/CodexBarCLI" >/dev/null 2>&1
 codesign --force --sign - "$APP" >/dev/null 2>&1
 codesign --verify --strict "$APP"
 echo "Built $(pwd)/$APP"
+
+# ditto keeps the code signature intact; plain zip can break it.
+ZIP="build/vibecheck-${VERSION}.zip"
+rm -f "$ZIP"
+ditto -c -k --keepParent "$APP" "$ZIP"
+echo "Zipped $(pwd)/$ZIP"

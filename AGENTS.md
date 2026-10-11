@@ -111,3 +111,39 @@ wastes work.
   session never looks frozen.
 - Keep both values as named constants in one place. Raise them only if a
   specific agent needs it, and say why in the commit message.
+
+## Releasing
+
+vibecheck ships through the Homebrew tap
+[ikramhasan/homebrew-tap](https://github.com/ikramhasan/homebrew-tap). Users install
+with `brew install --cask ikramhasan/tap/vibecheck`. The tap holds the cask
+(`Casks/vibecheck.rb`) and the release zips; this repo has no releases of its own.
+
+Pushing a `v*` tag runs `.github/workflows/release.yml`. It builds the app, publishes
+the zip as a release of the tap and updates the cask's `version` and `sha256`. Never
+edit those two lines in the tap by hand.
+
+Release only when asked to. Then:
+
+1. Make sure you're on `main`, the working tree is clean and `main` matches `origin/main`.
+2. Find the current release: `git fetch --tags` then
+   `git describe --tags --abbrev=0 --match 'v*'`. Cross-check it against
+   `gh release list -R ikramhasan/homebrew-tap`. If there's no tag yet, the first
+   release is `v0.3.0`.
+3. Read the commits since that tag (`git log <tag>..HEAD --oneline`) and choose the
+   next version with semantic versioning:
+   - any breaking change (`!` after the type, or a `BREAKING CHANGE:` footer) → major.
+     While the version is `0.x`, bump the minor instead.
+   - otherwise any `feat:` → minor
+   - otherwise (`fix:`, `perf:`, and so on) → patch
+   - only `docs:`, `chore:`, `ci:` or `test:` → nothing user-facing changed; say so and
+     ask before releasing anyway.
+
+   Versions only go up. Never reuse, move or delete an existing tag.
+4. Tell the user the current version, the proposed one and the commits that justify
+   it, and wait for their confirmation. A pushed tag publishes a release to users.
+5. `git tag vX.Y.Z && git push origin vX.Y.Z`, then follow the run with
+   `gh run watch -R ikramhasan/vibecheck`.
+6. Confirm the release exists in the tap and the cask there shows the new `version`.
+   If the workflow failed, report the failing step's output. Don't retry by moving or
+   re-pushing the tag; fix forward with the next patch version.
