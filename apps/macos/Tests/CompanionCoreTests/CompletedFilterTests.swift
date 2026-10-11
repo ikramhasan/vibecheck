@@ -16,7 +16,7 @@ import Testing
         var filter = CompletedFilter()
         #expect(filter.clearableCount(sessions) == 1)
         filter.clear(sessions)
-        #expect(filter.preview(sessions).map(\.sessionID) == ["busy", "asking", "stuck", "broken"])
+        #expect(filter.visible(sessions).map(\.sessionID) == ["busy", "asking", "stuck", "broken"])
         #expect(filter.clearableCount(sessions) == 0)
     }
 
@@ -25,10 +25,10 @@ import Testing
         filter.clear([session("a", .idle, since: 1)])
         let working = [session("a", .working, since: 2)]
         filter.forgetResumed(working)
-        #expect(filter.preview(working).count == 1)
+        #expect(filter.visible(working).count == 1)
         let doneAgain = [session("a", .idle, since: 3)]
         filter.forgetResumed(doneAgain)
-        #expect(filter.preview(doneAgain).count == 1)
+        #expect(filter.visible(doneAgain).count == 1)
         #expect(filter.clearableCount(doneAgain) == 1)
     }
 }

@@ -39,17 +39,17 @@ struct EdgePanelView: View {
 
     private var expanded: Bool { state.mode == .expanded }
     private var hidden: Bool { state.mode == .hidden }
-    private var count: Int { store.sessions.count }
-    private var preview: [AgentSession] { state.completed.preview(store.sessions) }
+    private var shown: [AgentSession] { state.completed.visible(store.sessions) }
+    private var count: Int { shown.count }
     private var onSettings: Bool { state.page == .settings }
-    private var groups: [SessionGroup] { ProjectIcons.shared.groups(store.sessions) }
+    private var groups: [SessionGroup] { ProjectIcons.shared.groups(shown) }
     private var asking: [AgentSession] { store.sessions.filter { state.pendingAttentionIDs.contains($0.id) } }
     private var showsQuestions: Bool { !onSettings && !asking.isEmpty }
 
     var body: some View {
         let groups = groups
         let width = expanded ? PanelMetrics.expandedWidth : PanelMetrics.collapsedWidth
-        let height = expanded ? pageHeight(groups) : PanelMetrics.collapsedHeight(count: preview.count)
+        let height = expanded ? pageHeight(groups) : PanelMetrics.collapsedHeight(count: count)
 
         ZStack(alignment: .trailing) {
             Color.clear
@@ -93,7 +93,7 @@ struct EdgePanelView: View {
             .blur(radius: expanded ? 0 : 6)
             .scaleEffect(expanded ? 1 : 0.96, anchor: .trailing)
 
-            CollapsedContent(sessions: preview, groups: ProjectIcons.shared.groups(preview))
+            CollapsedContent(sessions: shown, groups: groups)
                 .frame(width: PanelMetrics.collapsedWidth)
                 .opacity(expanded ? 0 : 1)
                 .blur(radius: expanded ? 4 : 0)

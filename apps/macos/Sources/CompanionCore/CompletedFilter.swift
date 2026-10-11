@@ -13,7 +13,7 @@ public struct CompletedFilter: Equatable, Sendable {
         Self.isCompleted(session) && cleared[session.id] == Self.since(session)
     }
 
-    public func preview(_ sessions: [AgentSession]) -> [AgentSession] {
+    public func visible(_ sessions: [AgentSession]) -> [AgentSession] {
         sessions.filter { !isCleared($0) }
     }
 

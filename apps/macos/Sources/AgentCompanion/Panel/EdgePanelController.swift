@@ -220,7 +220,7 @@ final class EdgePanelController {
     }
 
     private func clearCompleted() {
-        state.completed.clear(store.sessions)
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.86)) { state.completed.clear(store.sessions) }
         sessionsChanged(store.sessions)
     }
 
@@ -235,7 +235,7 @@ final class EdgePanelController {
         contentChanged()
         let hadPending = presentation.pendingAttention
         state.completed.forgetResumed(sessions)
-        presentation.update(sessions: sessions, previewCount: state.completed.preview(sessions).count)
+        presentation.update(sessions: sessions, previewCount: state.completed.visible(sessions).count)
         let newlyNeedsAttention = !presentation.pendingAttention.subtracting(hadPending).isEmpty
         apply(attentionArrived: newlyNeedsAttention)
     }
@@ -262,7 +262,8 @@ final class EdgePanelController {
         if state.page == .settings { return PanelMetrics.settingsHeight }
         let asking = store.sessions.filter { state.pendingAttentionIDs.contains($0.id) }
         if !asking.isEmpty { return QuestionMetrics.pageHeight(asking) }
-        return PanelMetrics.expandedHeight(groups: ProjectIcons.shared.groups(store.sessions), usage: usage.usage)
+        return PanelMetrics.expandedHeight(groups: ProjectIcons.shared.groups(state.completed.visible(store.sessions)),
+                                           usage: usage.usage)
     }
 
     // MARK: - Layout
@@ -284,7 +285,7 @@ final class EdgePanelController {
 
     /// Screen-space rect of the visible card, matching EdgePanelView's layout.
     private func cardRect(expanded: Bool) -> NSRect {
-        let count = state.completed.preview(store.sessions).count
+        let count = state.completed.visible(store.sessions).count
         let w = expanded ? PanelMetrics.expandedWidth : PanelMetrics.collapsedWidth
         let h = expanded ? targetHeight : PanelMetrics.collapsedHeight(count: count)
         let f = panel.frame
