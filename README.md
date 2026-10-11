@@ -64,6 +64,9 @@ pi install "$PWD/integrations/pi"     # uninstall: pi remove "$PWD/integrations/
 
 - No live sessions: hidden.
 - Sessions running: small tab on the right edge; hover to expand.
+- The check button in the panel header clears finished sessions from the tab. They come
+  back when they finish another turn; working, waiting, blocked and failed sessions
+  always stay.
 - A session needs attention (question, permission, input): expands by itself and shows
   only the pending questions, with their options, until you've hovered over it or
   clicked "Show all". A new request re-opens it.

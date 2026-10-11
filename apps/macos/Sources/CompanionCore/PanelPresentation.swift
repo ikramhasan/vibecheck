@@ -3,7 +3,8 @@ import Foundation
 /// Pure decision logic for how the edge panel presents itself. Kept free of
 /// AppKit/SwiftUI so it's unit-testable.
 ///
-/// - No sessions (and no usage to show) → hidden.
+/// - No sessions (and no usage to show) → hidden. Same when every session left is a
+///   completed one the user cleared, once the pointer leaves.
 /// - Sessions running → small collapsed tab.
 /// - Hovered → expanded.
 /// - A session newly needs attention → expanded on its own and stays open until
@@ -18,6 +19,7 @@ public struct PanelPresentation: Equatable, Sendable {
     public private(set) var acknowledged: Set<String> = []
     private var attentionKeys: Set<String> = []
     private var sessionCount = 0
+    private var previewCount = 0
     private var hovering = false
     /// Usage stats are enabled, so the tab stays reachable with no sessions running.
     private var hasPersistentContent = false
@@ -28,8 +30,9 @@ public struct PanelPresentation: Equatable, Sendable {
     /// Attention requests the user hasn't seen yet.
     public var pendingAttention: Set<String> { attentionKeys.subtracting(acknowledged) }
 
-    public mutating func update(sessions: [AgentSession]) {
+    public mutating func update(sessions: [AgentSession], previewCount: Int? = nil) {
         sessionCount = sessions.count
+        self.previewCount = previewCount ?? sessions.count
         attentionKeys = Set(sessions.compactMap(\.attentionKey))
         // Forget resolved requests so the same request later counts as new.
         acknowledged.formIntersection(attentionKeys)
@@ -69,6 +72,8 @@ public struct PanelPresentation: Equatable, Sendable {
         } else if sessionCount == 0 && !hasPersistentContent {
             mode = .hidden
             hovering = false
+        } else if previewCount == 0 && !hasPersistentContent && !hovering && pendingAttention.isEmpty {
+            mode = .hidden
         } else if hovering || !pendingAttention.isEmpty {
             mode = .expanded
         } else {

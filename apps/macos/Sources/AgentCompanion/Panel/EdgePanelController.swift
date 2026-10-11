@@ -88,6 +88,7 @@ final class PanelState {
     var pageChanging = false
     /// Session ids whose attention request hasn't been seen yet (highlighted rows).
     var pendingAttentionIDs: Set<String> = []
+    var completed = CompletedFilter()
 }
 
 /// A borderless, non-activating panel that floats above normal windows on every Space.
@@ -146,6 +147,7 @@ final class EdgePanelController {
                                  onOpenSettings: { [weak self] in self?.showPage(.settings) },
                                  onCloseSettings: { [weak self] in self?.showPage(.sessions) },
                                  onShowAll: { [weak self] in self?.showAllSessions() },
+                                 onClearCompleted: { [weak self] in self?.clearCompleted() },
                                  onQuit: { NSApp.terminate(nil) })
             .environment(settings)
         let hosting = FirstClickHostingView(rootView: root)
@@ -217,6 +219,11 @@ final class EdgePanelController {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
     }
 
+    private func clearCompleted() {
+        state.completed.clear(store.sessions)
+        sessionsChanged(store.sessions)
+    }
+
     private func showAllSessions() {
         presentation.acknowledgeAttention()
         apply(attentionArrived: false)
@@ -227,7 +234,8 @@ final class EdgePanelController {
     private func sessionsChanged(_ sessions: [AgentSession]) {
         contentChanged()
         let hadPending = presentation.pendingAttention
-        presentation.update(sessions: sessions)
+        state.completed.forgetResumed(sessions)
+        presentation.update(sessions: sessions, previewCount: state.completed.preview(sessions).count)
         let newlyNeedsAttention = !presentation.pendingAttention.subtracting(hadPending).isEmpty
         apply(attentionArrived: newlyNeedsAttention)
     }
@@ -276,7 +284,7 @@ final class EdgePanelController {
 
     /// Screen-space rect of the visible card, matching EdgePanelView's layout.
     private func cardRect(expanded: Bool) -> NSRect {
-        let count = store.sessions.count
+        let count = state.completed.preview(store.sessions).count
         let w = expanded ? PanelMetrics.expandedWidth : PanelMetrics.collapsedWidth
         let h = expanded ? targetHeight : PanelMetrics.collapsedHeight(count: count)
         let f = panel.frame

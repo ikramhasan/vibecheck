@@ -33,12 +33,14 @@ struct EdgePanelView: View {
     let onOpenSettings: () -> Void
     let onCloseSettings: () -> Void
     let onShowAll: () -> Void
+    let onClearCompleted: () -> Void
     let onQuit: () -> Void
     @Environment(AppSettings.self) private var settings
 
     private var expanded: Bool { state.mode == .expanded }
     private var hidden: Bool { state.mode == .hidden }
     private var count: Int { store.sessions.count }
+    private var preview: [AgentSession] { state.completed.preview(store.sessions) }
     private var onSettings: Bool { state.page == .settings }
     private var groups: [SessionGroup] { ProjectIcons.shared.groups(store.sessions) }
     private var asking: [AgentSession] { store.sessions.filter { state.pendingAttentionIDs.contains($0.id) } }
@@ -47,7 +49,7 @@ struct EdgePanelView: View {
     var body: some View {
         let groups = groups
         let width = expanded ? PanelMetrics.expandedWidth : PanelMetrics.collapsedWidth
-        let height = expanded ? pageHeight(groups) : PanelMetrics.collapsedHeight(count: count)
+        let height = expanded ? pageHeight(groups) : PanelMetrics.collapsedHeight(count: preview.count)
 
         ZStack(alignment: .trailing) {
             Color.clear
@@ -63,11 +65,12 @@ struct EdgePanelView: View {
             // Both pages stay mounted so their items can cascade past each other.
             ZStack(alignment: .top) {
                 ExpandedContent(groups: groups, sessionCount: count, usage: usage.usage,
+                                clearableCount: state.completed.clearableCount(store.sessions),
                                 pendingIDs: state.pendingAttentionIDs,
                                 isShown: expanded && !onSettings && !showsQuestions,
                                 hiddenSide: onSettings ? .leading : .trailing,
                                 paced: state.pageChanging,
-                                onOpenSettings: onOpenSettings, onQuit: onQuit)
+                                onOpenSettings: onOpenSettings, onClearCompleted: onClearCompleted, onQuit: onQuit)
                     .frame(height: PanelMetrics.expandedHeight(groups: groups, usage: usage.usage), alignment: .top)
                     .opacity(showsQuestions ? 0 : 1)
                     .allowsHitTesting(!onSettings && !showsQuestions)
@@ -90,7 +93,7 @@ struct EdgePanelView: View {
             .blur(radius: expanded ? 0 : 6)
             .scaleEffect(expanded ? 1 : 0.96, anchor: .trailing)
 
-            CollapsedContent(sessions: store.sessions, groups: groups)
+            CollapsedContent(sessions: preview, groups: ProjectIcons.shared.groups(preview))
                 .frame(width: PanelMetrics.collapsedWidth)
                 .opacity(expanded ? 0 : 1)
                 .blur(radius: expanded ? 4 : 0)
@@ -279,6 +282,7 @@ private struct ExpandedContent: View {
     let groups: [SessionGroup]
     let sessionCount: Int
     let usage: [ProviderUsage]
+    let clearableCount: Int
     let pendingIDs: Set<String>
     /// On screen: panel expanded and the sessions page selected.
     let isShown: Bool
@@ -286,6 +290,7 @@ private struct ExpandedContent: View {
     let hiddenSide: HorizontalEdge
     let paced: Bool
     let onOpenSettings: () -> Void
+    let onClearCompleted: () -> Void
     let onQuit: () -> Void
 
     var body: some View {
@@ -337,6 +342,10 @@ private struct ExpandedContent: View {
                     .background(Capsule().fill(Color.orange.opacity(0.14)))
             }
             Spacer()
+            if clearableCount > 0 {
+                HeaderButton(systemImage: "checkmark.circle", label: "Clear completed from the edge tab",
+                             action: onClearCompleted)
+            }
             HeaderButton(systemImage: "gearshape", label: "Settings", action: onOpenSettings)
             HeaderButton(systemImage: "power", label: "Quit Agent Companion", action: onQuit)
         }
