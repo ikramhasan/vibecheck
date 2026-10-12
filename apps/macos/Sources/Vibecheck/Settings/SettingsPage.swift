@@ -8,6 +8,7 @@ struct SettingsPage: View {
     let store: SessionStore
     let usage: UsageStore
     let updater: AppUpdater?
+    let launchAtLogin: LaunchAtLogin?
     /// The page is the one on screen (panel expanded and Settings selected).
     let isShown: Bool
     /// Page change (staggered hand-off) vs. panel expand/collapse.
@@ -21,12 +22,19 @@ struct SettingsPage: View {
 
             ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: 16) {
+                    if let launchAtLogin {
+                        SettingsSection("General") {
+                            LaunchAtLoginRow(launchAtLogin: launchAtLogin)
+                        }
+                        .cascade(shown: isShown, index: 1, side: .trailing, paced: paced)
+                    }
+
                     SettingsSection("Agents",
                                     footer: "Status shows running sessions in the panel. Usage shows session and "
                                         + "weekly limits and reset times, read with the agent's own sign-in.") {
                         AgentsList(settings: settings, store: store, usage: usage, agents: agents)
                     }
-                    .cascade(shown: isShown, index: 1, side: .trailing, paced: paced)
+                    .cascade(shown: isShown, index: 2, side: .trailing, paced: paced)
 
                     SettingsSection("Sessions",
                                     footer: "Finished sessions leave the panel after this long. They come back "
@@ -46,7 +54,7 @@ struct SettingsPage: View {
                         }
                         .frame(height: 30)
                     }
-                    .cascade(shown: isShown, index: 2, side: .trailing, paced: paced)
+                    .cascade(shown: isShown, index: 3, side: .trailing, paced: paced)
 
                     SettingsSection("Machines",
                                     footer: "Shows Claude, Codex and pi sessions running on Linux machines you reach with ssh, "
@@ -54,21 +62,21 @@ struct SettingsPage: View {
                                         + "open and only reads on the other machine. Key-based login is required.") {
                         MachinesList(settings: settings)
                     }
-                    .cascade(shown: isShown, index: 3, side: .trailing, paced: paced)
+                    .cascade(shown: isShown, index: 4, side: .trailing, paced: paced)
 
                     SettingsSection("Sounds",
                                     footer: "Played when a session needs input, finishes, or fails. Sounds are "
                                         + "your Mac's alert sounds, including any added to ~/Library/Sounds.") {
                         SoundsList(settings: settings)
                     }
-                    .cascade(shown: isShown, index: 4, side: .trailing, paced: paced)
+                    .cascade(shown: isShown, index: 5, side: .trailing, paced: paced)
 
                     SettingsSection("Loading indicator",
                                     footer: "Shown while an agent is working. Agents without an override use this.",
                                     grouped: false) {
                         LoaderGallery(selection: $settings.loader.global)
                     }
-                    .cascade(shown: isShown, index: 5, side: .trailing, paced: paced)
+                    .cascade(shown: isShown, index: 6, side: .trailing, paced: paced)
 
                     if !agents.isEmpty {
                         SettingsSection("Per agent") {
@@ -79,7 +87,7 @@ struct SettingsPage: View {
                                 }
                             }
                         }
-                        .cascade(shown: isShown, index: 6, side: .trailing, paced: paced)
+                        .cascade(shown: isShown, index: 7, side: .trailing, paced: paced)
                     }
 
                     if let updater {
@@ -88,7 +96,7 @@ struct SettingsPage: View {
                                             + "you install an update.") {
                             UpdatesList(updater: updater)
                         }
-                        .cascade(shown: isShown, index: 7, side: .trailing, paced: paced)
+                        .cascade(shown: isShown, index: 8, side: .trailing, paced: paced)
                     }
                 }
                 .padding(.horizontal, 14)
@@ -109,6 +117,9 @@ struct SettingsPage: View {
         }
         .padding(.top, PanelMetrics.flare)
         .padding(.bottom, PanelMetrics.flare)
+        .onChange(of: isShown) { _, shown in
+            if shown { launchAtLogin?.refresh() }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Settings")
     }
@@ -473,6 +484,25 @@ private struct MachinesList: View {
 }
 
 // MARK: - Updates
+
+private struct LaunchAtLoginRow: View {
+    let launchAtLogin: LaunchAtLogin
+
+    var body: some View {
+        HStack {
+            Text("Open at login")
+                .font(.system(size: 12))
+                .foregroundStyle(.primary)
+            Spacer(minLength: 6)
+            Toggle("Open at login", isOn: Binding(get: { launchAtLogin.isEnabled },
+                                                  set: { launchAtLogin.setEnabled($0) }))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+        }
+        .frame(height: 30)
+    }
+}
 
 private struct UpdatesList: View {
     @Bindable var updater: AppUpdater
