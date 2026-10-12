@@ -28,6 +28,13 @@ public final class SessionStore {
         }
     }
 
+    public func remove(_ source: SessionSource) {
+        source.stop()
+        sources.removeAll { $0 === source }
+        bySource[ObjectIdentifier(source)] = nil
+        recompute()
+    }
+
     /// Every agent seen so far, including hidden ones, so Settings can list them.
     public private(set) var seenAgents: [AgentSession.AgentInfo] = []
 

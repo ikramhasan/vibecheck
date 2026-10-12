@@ -14,6 +14,7 @@ public final class DiffStatsStore {
 
     @ObservationIgnored private let computer: DiffStatsComputing?
     @ObservationIgnored private let repository: (String) -> String?
+    @ObservationIgnored private let remoteGit: (String) -> GitReading?
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var trackers: [String: Tracker] = [:]
     @ObservationIgnored private var watchers: [String: CheckoutWatcher] = [:]
@@ -21,10 +22,13 @@ public final class DiffStatsStore {
 
     private struct Tracker {
         var cwd: String
+        var host: String?
         var checkout: String
+        var computer: DiffStatsComputing
         var updatedAt: Date
         var working: Bool
         var baseline: String?
+        var baselineSince: Date?
         var lastRun: Date?
         var running = false
         var runAgain = false
@@ -34,9 +38,11 @@ public final class DiffStatsStore {
     private static let resetsKey = "diffBaselineResets"
 
     public init(computer: DiffStatsComputing?, repository: @escaping (String) -> String?,
+                remoteGit: @escaping (String) -> GitReading? = { _ in nil },
                 defaults: UserDefaults = .standard, watchCheckouts: Bool = true) {
         self.computer = computer
         self.repository = repository
+        self.remoteGit = remoteGit
         self.defaults = defaults
         self.watch = watchCheckouts
         pruneResets()
@@ -47,17 +53,23 @@ public final class DiffStatsStore {
     }
 
     public func sessionsSharingCheckout(with session: AgentSession) -> Int {
-        guard let checkout = trackers[session.id]?.checkout else { return 0 }
-        return trackers.values.filter { $0.checkout == checkout }.count - 1
+        guard let tracker = trackers[session.id] else { return 0 }
+        return trackers.values.filter { $0.checkout == tracker.checkout && $0.host == tracker.host }.count - 1
     }
 
     public func patches(for session: AgentSession) async -> [FilePatch]? {
-        guard let computer, let tracker = trackers[session.id], let baseline = tracker.baseline else { return nil }
-        return await computer.patches(in: tracker.checkout, since: baseline)
+        guard let tracker = trackers[session.id], let baseline = tracker.baseline else { return nil }
+        return await tracker.computer.patches(in: tracker.checkout, since: baseline)
+    }
+
+    public func comparison(for session: AgentSession) async -> DiffComparison? {
+        guard let tracker = trackers[session.id], let baseline = tracker.baseline else { return nil }
+        let branch = await tracker.computer.branch(in: tracker.checkout)
+        return DiffComparison(branch: branch, baseline: baseline, since: tracker.baselineSince,
+                              baselineLeftHistory: stats[session.id]?.baselineLeftHistory ?? false)
     }
 
     public func update(_ sessions: [AgentSession]) {
-        guard computer != nil else { return }
         let current = Dictionary(sessions.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         for id in trackers.keys where current[id] == nil {
             trackers[id] = nil
@@ -66,14 +78,25 @@ public final class DiffStatsStore {
         }
         for (id, session) in current {
             let working = session.status == .working || session.status == .needsAttention
-            if var tracker = trackers[id], tracker.cwd == session.cwd {
+            if var tracker = trackers[id], tracker.cwd == session.cwd, tracker.host == session.host {
                 let moved = tracker.updatedAt != session.updatedAt
                 tracker.updatedAt = session.updatedAt
                 tracker.working = working
                 trackers[id] = tracker
                 if moved { requestRefresh(id) }
-            } else if let checkout = repository(session.cwd) {
-                trackers[id] = Tracker(cwd: session.cwd, checkout: checkout, updatedAt: session.updatedAt, working: working)
+            } else if let host = session.host {
+                guard let checkout = session.remoteCheckout, let git = remoteGit(host) else {
+                    trackers[id] = nil
+                    stats[id] = nil
+                    continue
+                }
+                trackers[id] = Tracker(cwd: session.cwd, host: host, checkout: checkout, computer: GitDiffStats(git: git),
+                                       updatedAt: session.updatedAt, working: working)
+                stats[id] = nil
+                resolveBaseline(id, at: session.startedAt)
+            } else if let computer, let checkout = repository(session.cwd) {
+                trackers[id] = Tracker(cwd: session.cwd, checkout: checkout, computer: computer,
+                                       updatedAt: session.updatedAt, working: working)
                 stats[id] = nil
                 resolveBaseline(id, at: session.startedAt)
             } else {
@@ -85,32 +108,36 @@ public final class DiffStatsStore {
     }
 
     public func resetBaseline(of session: AgentSession) {
-        guard let computer, let checkout = trackers[session.id]?.checkout else { return }
-        let id = session.id
+        guard let tracker = trackers[session.id] else { return }
+        let id = session.id, checkout = tracker.checkout, computer = tracker.computer
         Task {
             guard let head = await computer.baseline(in: checkout, at: nil),
                   trackers[id]?.checkout == checkout else { return }
             var resets = defaults.dictionary(forKey: Self.resetsKey) ?? [:]
-            resets[id] = ["baseline": head, "at": Date.now]
+            let now = Date.now
+            resets[id] = ["baseline": head, "at": now]
             defaults.set(resets, forKey: Self.resetsKey)
-            setBaseline(head, for: id)
+            setBaseline(head, since: now, for: id)
         }
     }
 
     private func resolveBaseline(_ id: String, at startedAt: Date?) {
-        if let reset = (defaults.dictionary(forKey: Self.resetsKey)?[id] as? [String: Any])?["baseline"] as? String {
-            return setBaseline(reset, for: id)
+        if let reset = defaults.dictionary(forKey: Self.resetsKey)?[id] as? [String: Any],
+           let baseline = reset["baseline"] as? String {
+            return setBaseline(baseline, since: reset["at"] as? Date, for: id)
         }
-        guard let computer, let checkout = trackers[id]?.checkout else { return }
+        guard let tracker = trackers[id] else { return }
+        let checkout = tracker.checkout, computer = tracker.computer
         Task {
             guard let baseline = await computer.baseline(in: checkout, at: startedAt),
                   trackers[id]?.checkout == checkout else { return }
-            setBaseline(baseline, for: id)
+            setBaseline(baseline, since: startedAt, for: id)
         }
     }
 
-    private func setBaseline(_ baseline: String, for id: String) {
+    private func setBaseline(_ baseline: String, since: Date?, for id: String) {
         trackers[id]?.baseline = baseline
+        trackers[id]?.baselineSince = since
         trackers[id]?.lastRun = nil
         requestRefresh(id)
     }
@@ -131,10 +158,10 @@ public final class DiffStatsStore {
     }
 
     private func run(_ id: String) {
-        guard let computer, let tracker = trackers[id], let baseline = tracker.baseline else { return }
+        guard let tracker = trackers[id], let baseline = tracker.baseline else { return }
         trackers[id]?.running = true
         trackers[id]?.lastRun = .now
-        let checkout = tracker.checkout
+        let checkout = tracker.checkout, computer = tracker.computer
         Task {
             let result = await computer.stats(in: checkout, since: baseline)
             guard trackers[id]?.checkout == checkout else { return }
@@ -151,12 +178,12 @@ public final class DiffStatsStore {
     }
 
     private func checkoutChanged(_ checkout: String) {
-        for (id, tracker) in trackers where tracker.checkout == checkout { requestRefresh(id) }
+        for (id, tracker) in trackers where tracker.host == nil && tracker.checkout == checkout { requestRefresh(id) }
     }
 
     private func updateWatchers() {
         guard watch else { return }
-        let active = Set(trackers.values.filter(\.working).map(\.checkout))
+        let active = Set(trackers.values.filter { $0.working && $0.host == nil }.map(\.checkout))
         for (checkout, watcher) in watchers where !active.contains(checkout) {
             watcher.stop()
             watchers[checkout] = nil

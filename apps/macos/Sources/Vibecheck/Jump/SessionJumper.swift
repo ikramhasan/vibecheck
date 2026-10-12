@@ -11,14 +11,14 @@ enum SessionJumper {
     private nonisolated static let log = Logger(subsystem: "com.ikramulhasan.vibecheck", category: "jump")
 
     static func target(for session: AgentSession) -> JumpTarget? {
-        JumpResolver.resolve(origin: session.origin, ancestry: session.pid.map(ProcessTree.ancestry) ?? [])
+        JumpResolver.resolve(origin: session.origin, ancestry: localPID(of: session).map(ProcessTree.ancestry) ?? [])
     }
 
     /// Returns false when there's nowhere to go. Selects the exact tab (and tmux pane)
     /// in Terminal and iTerm2; other hosts are brought forward as a whole.
     @discardableResult
     static func jump(to session: AgentSession) -> Bool {
-        let agent = session.pid.flatMap(ProcessScanner.snapshot(pid:))
+        let agent = localPID(of: session).flatMap(ProcessScanner.snapshot(pid:))
         if let agent, let tty = agent.tty, let tmux = agent.environment["TMUX"],
            let host = TmuxFocus.focus(paneTTY: tty, tmuxEnvironment: tmux),
            let terminal = JumpResolver.resolve(origin: nil, ancestry: ProcessTree.ancestry(of: host.clientPID)) {
@@ -34,6 +34,11 @@ enum SessionJumper {
             return true
         }
         return activate(target)
+    }
+
+    /// The agent itself, or for a remote session the ssh process that carries it.
+    private static func localPID(of session: AgentSession) -> Int32? {
+        session.pid ?? session.sshPID
     }
 
     private static func activate(_ target: JumpTarget) -> Bool {

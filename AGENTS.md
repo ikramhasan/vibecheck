@@ -99,6 +99,21 @@ for the few things transcripts can't show. Three layers feed one session state:
   `apps/macos/Tests/CompanionCoreTests/Fixtures/<agent>/` and test the state
   mapping against them.
 
+## Remote machines
+
+`RemoteSessionSource` streams sessions from other machines over one ssh connection running
+`RemoteScript`. The Mac side feeds the reported facts into the same discovery functions and
+transcript parsers as local sessions; don't parse agent formats in the script.
+
+- The script is read-only, like everything else here. It may read agent files, `/proc` and
+  git, and must never write, lock or run anything that can (no `git` commands outside the
+  fixed query list, always `GIT_OPTIONAL_LOCKS=0`).
+- Every request from the Mac is validated in the script: follows only `.jsonl` files under
+  the agents' session folders, git queries only by name with checked arguments, file reads
+  only inside the checkout.
+- Remote sessions have `host` set and no `pid`; `sshPID` is the local ssh process used to
+  jump to them.
+
 ## Settle delay before updating state
 
 Agents append several lines in quick succession (one per reply part, then the

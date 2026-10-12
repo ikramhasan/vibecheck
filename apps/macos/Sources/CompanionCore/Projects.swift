@@ -6,10 +6,13 @@ public struct ProjectInfo: Hashable, Sendable {
     /// Grouping key: the repository root (or the directory itself outside git).
     public var root: String
     public var name: String
+    /// The ssh host the project lives on; `nil` for this Mac.
+    public var host: String?
 
-    public init(root: String, name: String) {
+    public init(root: String, name: String, host: String? = nil) {
         self.root = root
         self.name = name
+        self.host = host
     }
 
     /// Two-letter fallback when a project has no icon: initials for multi-word names
@@ -214,7 +217,10 @@ public struct SessionGroup: Identifiable, Hashable, Sendable {
         var order: [String] = []
         var groups: [String: SessionGroup] = [:]
         for s in sessions {
-            let p = project(s.cwd)
+            let p = s.host.map { host in
+                let root = s.remoteCheckout ?? s.cwd
+                return ProjectInfo(root: "\(host):\(root)", name: URL(fileURLWithPath: root).lastPathComponent, host: host)
+            } ?? project(s.cwd)
             if groups[p.root] == nil { order.append(p.root); groups[p.root] = SessionGroup(project: p, sessions: []) }
             groups[p.root]!.sessions.append(s)
         }

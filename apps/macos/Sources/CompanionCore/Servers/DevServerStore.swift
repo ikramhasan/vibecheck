@@ -12,6 +12,7 @@ public final class DevServerStore {
     @ObservationIgnored public var onChange: (([DevServer]) -> Void)?
     @ObservationIgnored private let agentPIDs: @MainActor () -> Set<Int32>
     @ObservationIgnored private let scan: @Sendable (Set<Int32>) -> [DevServer]
+    @ObservationIgnored private let remote: @MainActor () -> [DevServer]
     @ObservationIgnored private let terminate: @Sendable (DevServer, Set<Int32>) async -> Void
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private var visible = false
@@ -20,9 +21,11 @@ public final class DevServerStore {
 
     public init(agentPIDs: @escaping @MainActor () -> Set<Int32>,
                 scan: @escaping @Sendable (Set<Int32>) -> [DevServer] = DevServerScanner.scan,
+                remote: @escaping @MainActor () -> [DevServer] = { [] },
                 terminate: @escaping @Sendable (DevServer, Set<Int32>) async -> Void = DevServerStopper.stop) {
         self.agentPIDs = agentPIDs
         self.scan = scan
+        self.remote = remote
         self.terminate = terminate
     }
 
@@ -51,7 +54,7 @@ public final class DevServerStore {
         Task {
             let found = await Task.detached(priority: .utility) { scan(pids) }.value
             scanning = false
-            publish(found)
+            publish(found + remote())
         }
     }
 

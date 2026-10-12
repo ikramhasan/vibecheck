@@ -82,7 +82,7 @@ import Testing
     @discardableResult
     private func run(_ repo: String, _ arguments: String...) throws -> String {
         let process = Process()
-        process.executableURL = try #require(git).executable
+        process.executableURL = try #require(git?.git as? LocalGit).executable
         process.arguments = ["-C", repo] + arguments
         let out = Pipe()
         process.standardOutput = out
@@ -167,6 +167,8 @@ private actor FakeDiffs: DiffStatsComputing {
     }
 
     func patches(in checkout: String, since baseline: String) async -> [FilePatch]? { [] }
+
+    func branch(in checkout: String) async -> String? { "main" }
 }
 
 @MainActor
@@ -193,6 +195,9 @@ private actor FakeDiffs: DiffStatsComputing {
         #expect(await fake.baselineDates == [Date(timeIntervalSince1970: 1000)])
         #expect(store.stats(for: inRepo)?.added == 1)
         #expect(store.stats(for: outside) == nil)
+        #expect(await store.comparison(for: inRepo) == DiffComparison(
+            branch: "main", baseline: "start", since: Date(timeIntervalSince1970: 1000), baselineLeftHistory: true))
+        #expect(await store.comparison(for: outside) == nil)
     }
 
     @Test func throttlesRefreshesWhileTheTranscriptKeepsMoving() async throws {
@@ -235,5 +240,32 @@ private actor FakeDiffs: DiffStatsComputing {
         store.update([a, b, c])
         #expect(store.sessionsSharingCheckout(with: a) == 1)
         #expect(store.sessionsSharingCheckout(with: c) == 0)
+    }
+}
+
+@Suite struct DiffComparisonTests {
+    @Test func namesTheBranchAndStartingCommit() {
+        let comparison = DiffComparison(branch: "perf/x", baseline: "b08b00c00fdd414c", since: nil, baselineLeftHistory: false)
+        #expect(comparison.summary(since: "13:26") == "perf/x · since b08b00c at 13:26 → working tree")
+        #expect(comparison.summary(since: nil) == "perf/x · since b08b00c → working tree")
+    }
+
+    @Test func flagsDetachedHeadAndRewrittenHistory() {
+        let comparison = DiffComparison(branch: nil, baseline: "b08b00c00fdd414c", since: nil, baselineLeftHistory: true)
+        #expect(comparison.summary(since: nil) == "detached HEAD · since b08b00c → working tree · branch changed since then")
+    }
+}
+
+@Suite struct LocalGitTests {
+    @Test func untrackedSymlinksAreNotRead() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "vibecheck-link-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let secret = directory.appending(path: "secret.txt")
+        try Data("key\n".utf8).write(to: secret)
+        try FileManager.default.createSymbolicLink(at: directory.appending(path: "link.txt"), withDestinationURL: secret)
+        let git = LocalGit(executable: URL(fileURLWithPath: "/usr/bin/git"))
+        #expect(await git.contents(of: "link.txt", in: directory.path) == nil)
+        #expect(await git.lineCount(of: "link.txt", in: directory.path) == nil)
+        #expect(await git.lineCount(of: "secret.txt", in: directory.path) == 1)
     }
 }

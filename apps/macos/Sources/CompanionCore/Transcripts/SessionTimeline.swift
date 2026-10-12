@@ -135,3 +135,14 @@ public struct SessionTimeline: Equatable, Sendable {
         (path as NSString).lastPathComponent
     }
 }
+
+extension SessionTimeline {
+    func session(for live: LiveSession, updatedAt: Date) -> AgentSession {
+        AgentSession(agent: live.agent, sessionID: live.sessionID, cwd: live.cwd,
+                     name: live.name ?? title, model: model, pid: live.pid, origin: live.origin,
+                     status: hasEvents ? status : live.statusWithoutTranscript,
+                     task: task, lastReply: lastReply, activity: activity, attention: attention,
+                     context: context, wasInterrupted: wasInterrupted,
+                     startedAt: live.startedAt, updatedAt: updatedAt)
+    }
+}

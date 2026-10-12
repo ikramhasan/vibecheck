@@ -143,7 +143,7 @@ final class EdgePanelController {
 
     init(store: SessionStore, usage: UsageStore, servers: DevServerStore, actions: ActionStore, diffs: DiffStatsStore,
          onShowDiff: @escaping (AgentSession) -> Void,
-         settings: AppSettings, updater: AppUpdater?) {
+         settings: AppSettings, machines: RemoteMachines, updater: AppUpdater?) {
         self.store = store
         self.usage = usage
         self.servers = servers
@@ -167,6 +167,7 @@ final class EdgePanelController {
                                  onCloseActionPage: { [weak self] in self?.showPage(.actions) },
                                  onQuit: { NSApp.terminate(nil) })
             .environment(settings)
+            .environment(machines)
         let hosting = FirstClickHostingView(rootView: root)
         hosting.sizingOptions = []
         panel.contentView = hosting

@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var servers: DevServerStore?
     private var actions: ActionStore?
     private var diffs: DiffStatsStore?
+    private var machines: RemoteMachines?
     private var diffWindow: DiffWindowController?
     private var controller: EdgePanelController?
     private var updater: AppUpdater?
@@ -22,24 +23,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let store = SessionStore(sources: sources)
         let usage = UsageStore(fetcher: args.contains("--demo") ? DemoUsage() : CodexBarCLI.locate())
         let settings = AppSettings()
+        let machines = RemoteMachines(store: store)
         let servers = args.contains("--demo")
             ? DevServerStore(agentPIDs: { [] }, scan: { _ in DemoData.servers }, terminate: { _, _ in })
-            : DevServerStore(agentPIDs: { store.agentPIDs }, terminate: ServerTerminator.stop)
+            : DevServerStore(agentPIDs: { store.agentPIDs }, remote: { machines.servers }, terminate: ServerTerminator.stop)
         let actions = args.contains("--demo") ? DemoData.actionStore() : ActionStore()
         let diffs = args.contains("--demo")
             ? DiffStatsStore(computer: DemoDiffStats(), repository: { $0 }, watchCheckouts: false)
             : DiffStatsStore(computer: GitDiffStats.locate(),
-                             repository: { ProjectIcons.shared.resolver.repository(for: $0) })
+                             repository: { ProjectIcons.shared.resolver.repository(for: $0) },
+                             remoteGit: { machines.git(on: $0) })
         let updater = AppUpdater.bundled()
         let diffWindow = DiffWindowController(diffs: diffs)
         let controller = EdgePanelController(store: store, usage: usage, servers: servers, actions: actions, diffs: diffs,
                                              onShowDiff: { diffWindow?.show($0, project: ProjectIcons.shared.project(for: $0.cwd)) },
-                                             settings: settings, updater: updater)
+                                             settings: settings, machines: machines, updater: updater)
         self.store = store
         self.usage = usage
         self.servers = servers
         self.actions = actions
         self.diffs = diffs
+        self.machines = machines
         self.diffWindow = diffWindow
         self.controller = controller
         self.updater = updater
@@ -47,6 +51,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         observeAgentPreferences(settings) { prefs in
             store.setHiddenAgents(prefs.hiddenStatus)
             usage.setEnabled(prefs.usage)
+        }
+        if !args.contains("--demo") {
+            observeRemoteHosts(settings) { machines.update($0) }
+            NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil,
+                                                              queue: .main) { _ in
+                MainActor.assumeIsolated { machines.reconnect() }
+            }
         }
         observeSessions(store) { [weak self] sessions in
             guard let self else { return }
@@ -67,6 +78,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Task { @MainActor in self?.observeAgentPreferences(settings, apply) }
         }
         apply(prefs)
+    }
+
+    private func observeRemoteHosts(_ settings: AppSettings, _ apply: @escaping @MainActor ([RemoteHost]) -> Void) {
+        let hosts = withObservationTracking { settings.remoteHosts } onChange: { [weak self] in
+            Task { @MainActor in self?.observeRemoteHosts(settings, apply) }
+        }
+        apply(hosts)
     }
 
     private func observeSessions(_ store: SessionStore, _ apply: @escaping @MainActor ([AgentSession]) -> Void) {
@@ -226,7 +244,9 @@ struct DemoUsage: UsageFetching {
 }
 
 struct DemoDiffStats: DiffStatsComputing {
-    func baseline(in checkout: String, at date: Date?) async -> String? { "demo" }
+    func baseline(in checkout: String, at date: Date?) async -> String? { "3b18e51c0ffee" }
+
+    func branch(in checkout: String) async -> String? { "main" }
 
     func stats(in checkout: String, since baseline: String) async -> DiffStats? {
         switch (checkout as NSString).lastPathComponent {

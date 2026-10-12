@@ -83,6 +83,32 @@ process and its session.
 pi install "$PWD/integrations/pi"     # uninstall: pi remove "$PWD/integrations/pi"
 ```
 
+## Remote machines
+
+Settings → Machines adds Linux machines you reach with ssh (an alias from `~/.ssh/config`,
+`user@host`, or a Tailscale name). Their Claude, Codex and pi sessions show in the panel
+under the machine's name, with diff stats and the diff window. Nothing is installed on the
+other machine:
+
+- vibecheck keeps one `ssh -T <host> bash -s` connection per machine and sends it a fixed
+  script (`apps/macos/Sources/CompanionCore/Remote/RemoteScript.swift`). The script only
+  reads: agent registries, `/proc`, new transcript lines, and a fixed set of git queries
+  (`GIT_OPTIONAL_LOCKS=0`, no external diff or textconv). It exits when the connection
+  closes.
+- ssh runs with `BatchMode=yes`, so key-based login is required, and never shares or
+  creates a ControlMaster connection. Host keys are checked as usual.
+- Only `SSH_CONNECTION` and `PI_SUBAGENT_CHILD` are read from remote process
+  environments; nothing else leaves the machine except transcripts and diffs.
+- Clicking a remote session opens the app on this Mac that runs it: the app whose
+  `ssh -L` tunnel reaches the agent's server (T3 Code), or the terminal tab (and tmux
+  pane) of the `ssh` session the agent was started from. This needs a direct ssh
+  connection; through `ProxyJump` or `ProxyCommand` there's nothing on this Mac to match.
+- Dev servers on the machine show in the Servers tab as `host:port` and open at the
+  machine's address. Servers that only listen on its localhost are listed without a link.
+  Remote servers can't be stopped from vibecheck.
+- The connection reconnects after errors (2 s, doubling to 60 s) and right after the Mac
+  wakes. macOS machines aren't supported yet.
+
 ## Behaviour
 
 - No live sessions: hidden.
