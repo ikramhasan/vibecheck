@@ -29,7 +29,7 @@ npm-debug.log*
 .env
 .env.*
 
-# Downloaded by apps/macos/scripts/fetch-codexbar.sh
+# Built by apps/macos/scripts/build-diff-viewer.sh
 /apps/macos/vendor/
 
 # Third-party projects cloned for study (see AGENTS.md)

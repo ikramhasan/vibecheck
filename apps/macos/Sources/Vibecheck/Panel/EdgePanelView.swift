@@ -79,6 +79,7 @@ struct EdgePanelView: View {
             // Both pages stay mounted so their items can cascade past each other.
             ZStack(alignment: .top) {
                 ExpandedContent(groups: groups, sessionCount: count, usage: usage.usage,
+                                usageRefreshing: usage.isRefreshing,
                                 servers: servers.servers, sessions: store.sessions, actions: actions, diffs: diffs,
                                 serversOfSessionID: state.serversOfSessionID,
                                 tab: state.page.tab,
@@ -88,6 +89,7 @@ struct EdgePanelView: View {
                                 hiddenSide: covered ? .leading : .trailing,
                                 paced: state.pageChanging,
                                 onSelectTab: onSelectTab, onOpenSettings: onOpenSettings,
+                                onRefreshUsage: usage.refreshAll,
                                 onClearCompleted: onClearCompleted, onDismiss: onDismiss,
                                 onShowServers: onShowServers, onShowDiff: onShowDiff,
                                 onStopServer: servers.stopServer, onEditAction: onEditAction,
@@ -278,9 +280,7 @@ private struct SessionBadge: View {
                 }
             }
             .overlay(alignment: .bottomTrailing) {
-                AgentGlyph(agentID: session.agent.id, size: 8)
-                    .frame(width: 13, height: 13)
-                    .glassEffect(.regular, in: .circle)
+                AgentGlyph(agentID: session.agent.id, size: 13)
                     .offset(x: 4, y: 4)
             }
             .help("\(session.agent.name) · \(project.name)")
@@ -327,6 +327,7 @@ private struct ExpandedContent: View {
     let groups: [SessionGroup]
     let sessionCount: Int
     let usage: [ProviderUsage]
+    let usageRefreshing: Bool
     let servers: [DevServer]
     let sessions: [AgentSession]
     let actions: ActionStore
@@ -342,6 +343,7 @@ private struct ExpandedContent: View {
     let paced: Bool
     let onSelectTab: (PanelPage) -> Void
     let onOpenSettings: () -> Void
+    let onRefreshUsage: () -> Void
     let onClearCompleted: () -> Void
     let onDismiss: (AgentSession) -> Void
     let onShowServers: (AgentSession) -> Void
@@ -401,7 +403,7 @@ private struct ExpandedContent: View {
                 }
             }
             if !usage.isEmpty {
-                UsageSection(usage: usage)
+                UsageSection(usage: usage, isRefreshing: usageRefreshing, onRefresh: onRefreshUsage)
                     .frame(height: PanelMetrics.usageHeight(usage), alignment: .top)
                     .modifier(UsageReveal(shown: sessionsShown, index: min(groups.count, 6) + 1,
                                           side: sessionsSide, paced: paced))

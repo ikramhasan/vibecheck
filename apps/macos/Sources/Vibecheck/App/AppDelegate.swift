@@ -21,7 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ? [StaticSessionSource(DemoData.sessions)]
             : [StatusDirectorySource(), TranscriptSessionSource()]
         let store = SessionStore(sources: sources)
-        let usage = UsageStore(fetcher: args.contains("--demo") ? DemoUsage() : CodexBarCLI.locate())
+        let usage = UsageStore(providers: args.contains("--demo") ? DemoUsage.providers : [ClaudeUsage(), CodexUsage(), KiroUsage()])
         let settings = AppSettings()
         let machines = RemoteMachines(store: store)
         let servers = args.contains("--demo")
@@ -206,41 +206,31 @@ enum DemoData {
     }()
 }
 
-/// Canned usage for `--demo`: no CLI, no network.
-struct DemoUsage: UsageFetching {
-    func providers() async throws -> [ProviderInfo] {
-        [.init(id: "claude", name: "Claude"), .init(id: "codex", name: "Codex"),
-         .init(id: "pi", name: "Pi"), .init(id: "cursor", name: "Cursor"), .init(id: "gemini", name: "Gemini")]
-    }
+struct DemoUsage: UsageProvider {
+    let info: ProviderInfo
+    let plan: String?
+    let windows: [(label: String, used: Double, minutes: Int, resetsIn: TimeInterval)]
 
-    func usage(provider: String) async throws -> CodexBarDecoder.UsageEntry? {
+    static let providers: [UsageProvider] = [
+        DemoUsage(info: .init(id: "claude", name: "Claude"), plan: "Max 5x", windows: [
+            ("5h", 37, 300, 3.6 * 3600), ("Weekly", 82, 10080, 6 * 86400), ("Fable Weekly", 12, 10080, 3 * 86400),
+        ]),
+        DemoUsage(info: .init(id: "codex", name: "Codex"), plan: "Plus", windows: [
+            ("5h", 12, 300, 2.2 * 3600), ("Weekly", 41, 10080, 3 * 86400),
+        ]),
+        DemoUsage(info: .init(id: "kiro", name: "Kiro"), plan: "Kiro Power", windows: [
+            ("Monthly", 68, 43200, 19 * 86400),
+        ]),
+    ]
+
+    func fetch() async throws -> UsageReport {
         try await Task.sleep(for: .milliseconds(400))
         let now = Date()
-        switch provider {
-        case "claude":
-            return .init(provider: provider, error: nil, plan: "Claude Max", windows: [
-                .init(label: "5h", usedPercent: 37, windowMinutes: 300, resetsAt: now.addingTimeInterval(3.6 * 3600)),
-                .init(label: "Weekly", usedPercent: 82, windowMinutes: 10080, resetsAt: now.addingTimeInterval(6 * 86400)),
-            ], updatedAt: now)
-        case "codex":
-            return .init(provider: provider, error: nil, plan: "Plus", windows: [
-                .init(label: "5h", usedPercent: 12, windowMinutes: 300, resetsAt: now.addingTimeInterval(2.2 * 3600)),
-                .init(label: "Weekly", usedPercent: 41, windowMinutes: 10080, resetsAt: now.addingTimeInterval(3 * 86400)),
-            ], updatedAt: now)
-        default:
-            return .init(provider: provider, error: "Not logged in", plan: nil, windows: [], updatedAt: nil)
-        }
+        return UsageReport(plan: plan, windows: windows.map {
+            UsageWindow(label: $0.label, usedPercent: $0.used, windowMinutes: $0.minutes,
+                        resetsAt: now.addingTimeInterval($0.resetsIn))
+        })
     }
-
-    func cost(provider: String) async throws -> CostSummary? {
-        switch provider {
-        case "claude": .init(todayUSD: 33.31, periodUSD: 456.09)
-        case "codex": .init(todayUSD: 4.12, periodUSD: 61.80)
-        default: nil
-        }
-    }
-
-    func supportsCost(_ provider: String) -> Bool { true }
 }
 
 struct DemoDiffStats: DiffStatsComputing {

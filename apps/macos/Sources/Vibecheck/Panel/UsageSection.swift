@@ -2,27 +2,41 @@ import CompanionCore
 import SwiftUI
 
 /// Compact usage block under the session list: one group per enabled provider with a
-/// bar per quota window (5h, weekly, …), reset countdown, and local cost estimate.
+/// bar per quota window (5h, weekly, …) and its reset countdown.
 struct UsageSection: View {
     let usage: [ProviderUsage]
+    let isRefreshing: Bool
+    let onRefresh: () -> Void
+
+    private var widestLabel: String {
+        usage.flatMap(\.windows).map(\.label).max { $0.count < $1.count } ?? ""
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Usage")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.tertiary)
-                .textCase(.uppercase)
-                .tracking(0.4)
-                .frame(maxWidth: .infinity, minHeight: PanelMetrics.usageHeaderHeight,
-                       maxHeight: PanelMetrics.usageHeaderHeight, alignment: .bottomLeading)
-                .padding(.horizontal, 18)
-                // Full-width hairline, matching the dividers between project groups.
-                .overlay(alignment: .top) {
-                    Rectangle().fill(.separator).frame(height: 1).padding(.horizontal, 18)
-                }
+            HStack(alignment: .bottom, spacing: 6) {
+                Text("Usage")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                    .textCase(.uppercase)
+                    .tracking(0.4)
+                Spacer(minLength: 0)
+                Text("% used")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.tertiary)
+                    .help("Bars and percentages show how much of each limit is used")
+                RefreshButton(isRefreshing: isRefreshing, action: onRefresh)
+            }
+            .frame(maxWidth: .infinity, minHeight: PanelMetrics.usageHeaderHeight,
+                   maxHeight: PanelMetrics.usageHeaderHeight, alignment: .bottomLeading)
+            .padding(.horizontal, 18)
+            // Full-width hairline, matching the dividers between project groups.
+            .overlay(alignment: .top) {
+                Rectangle().fill(.separator).frame(height: 1).padding(.horizontal, 18)
+            }
 
             let content = VStack(alignment: .leading, spacing: PanelMetrics.usageProviderGap) {
-                ForEach(usage) { ProviderUsageView(usage: $0) }
+                ForEach(usage) { ProviderUsageView(usage: $0, widestLabel: widestLabel) }
             }
             .padding(.top, 6)
             .padding(.horizontal, 18)
@@ -38,8 +52,31 @@ struct UsageSection: View {
     }
 }
 
+private struct RefreshButton: View {
+    let isRefreshing: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "arrow.clockwise")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(hovering ? HierarchicalShapeStyle.secondary : .tertiary)
+                .symbolEffect(.rotate, isActive: isRefreshing)
+                .frame(width: 16, height: 16)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isRefreshing)
+        .onHover { h in withAnimation(.easeOut(duration: 0.12)) { hovering = h } }
+        .help(isRefreshing ? "Refreshing usage…" : "Refresh usage")
+        .accessibilityLabel("Refresh usage")
+    }
+}
+
 private struct ProviderUsageView: View {
     let usage: ProviderUsage
+    let widestLabel: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -58,9 +95,6 @@ private struct ProviderUsageView: View {
                         .lineLimit(1)
                 }
                 Spacer(minLength: 4)
-                if let cost = usage.cost {
-                    CostLabel(cost: cost)
-                }
             }
             .frame(height: PanelMetrics.usageProviderHeader)
 
@@ -74,7 +108,17 @@ private struct ProviderUsageView: View {
                 if usage.windows.isEmpty {
                     message("No quota reported", color: Color.primary.opacity(0.4))
                 } else {
-                    ForEach(usage.windows, id: \.label) { WindowRow(window: $0) }
+                    Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 0) {
+                        GridRow {
+                            Text(widestLabel)
+                                .font(WindowRow.labelFont)
+                                .fixedSize()
+                                .frame(minWidth: 50, alignment: .leading)
+                                .frame(height: 0)
+                                .hidden()
+                        }
+                        ForEach(usage.windows, id: \.label) { WindowRow(window: $0) }
+                    }
                 }
             }
         }
@@ -101,18 +145,25 @@ private struct ProviderUsageView: View {
 }
 
 private struct WindowRow: View {
+    static let labelFont = Font.system(size: 11, weight: .medium)
     let window: UsageWindow
 
     var body: some View {
-        HStack(spacing: 8) {
+        GridRow {
             Text(window.label)
-                .font(.system(size: 11, weight: .medium))
+                .font(Self.labelFont)
                 .foregroundStyle(.secondary)
-                .frame(width: 50, alignment: .leading)
                 .lineLimit(1)
+                .fixedSize()
+                .frame(minWidth: 50, minHeight: PanelMetrics.usageLine, alignment: .leading)
+                .help(helpText)
 
             UsageBar(fraction: window.usedPercent / 100, tint: tint)
                 .frame(height: 4)
+                .frame(maxWidth: .infinity)
+                .help(helpText)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(helpText)
 
             Text("\(Int(window.usedPercent.rounded()))%")
                 .font(.system(size: 11, weight: .medium).monospacedDigit())
@@ -126,10 +177,6 @@ private struct WindowRow: View {
             }
             .frame(width: 56, alignment: .trailing)
         }
-        .frame(height: PanelMetrics.usageLine)
-        .help(helpText)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(helpText)
     }
 
     private var tint: Color { UsageTint.color(usedPercent: window.usedPercent) }
@@ -166,35 +213,6 @@ private struct UsageBar: View {
             }
         }
         .animation(.easeOut(duration: 0.4), value: fraction)
-    }
-}
-
-private struct CostLabel: View {
-    let cost: CostSummary
-
-    var body: some View {
-        HStack(spacing: 4) {
-            if let today = cost.todayUSD {
-                Text(Self.money(today))
-                    .foregroundStyle(.primary)
-                Text("today").foregroundStyle(.tertiary)
-            }
-            if cost.todayUSD != nil, cost.periodUSD != nil {
-                Text("·").foregroundStyle(.quaternary)
-            }
-            if let period = cost.periodUSD {
-                Text(Self.money(period))
-                    .foregroundStyle(.secondary)
-                Text("30d").foregroundStyle(.tertiary)
-            }
-        }
-        .font(.system(size: 10.5, weight: .medium).monospacedDigit())
-        .lineLimit(1)
-        .help("Estimated at API list prices from local session logs (\(cost.periodLabel ?? "last 30 days")).")
-    }
-
-    static func money(_ v: Double) -> String {
-        v >= 100 ? "$\(Int(v.rounded()))" : String(format: "$%.2f", v)
     }
 }
 

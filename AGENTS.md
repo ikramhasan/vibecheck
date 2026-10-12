@@ -39,6 +39,7 @@ git clone --depth 1 <url> reference/<name>
 |---|---|---|
 | [agentsview](https://github.com/kenn-io/agentsview) | MIT | Archive, search and cost tracking for ~60 agents. Its per-agent parsers in `internal/parser/` document where each agent stores sessions and what format it uses |
 | [thinking-orbs](https://github.com/yogesharc/thinking-orbs) | MIT | The dot-sphere status orbs. `apps/web/registry/orb/orb-core.ts` is ported to `apps/macos/Sources/Vibecheck/Orbs/Orb.swift` |
+| [codexbar](https://github.com/steipete/CodexBar) | MIT | Plan usage clients for ~100 providers. `Sources/CodexBarCore/Providers/<Provider>/` is where usage endpoints, credential locations and response shapes come from |
 
 When code is ported from a project here, respect its license and credit it at
 the place it's used.
@@ -71,7 +72,7 @@ for the few things transcripts can't show. Three layers feed one session state:
 - **Port, don't bundle:** reimplement in Swift as a `SessionSource` in
   `apps/macos/Sources/CompanionCore`. Port only what the panel needs: discovery,
   cwd, model, name, latest prompt, current tool, context usage, and state. Skip archiving,
-  search, cost and analytics (CodexBar covers usage).
+  search, cost and analytics.
 - **Read incrementally:** remember each file's byte offset and parse only new
   lines. Ignore a trailing partial line until it's complete.
 - **Read the tail first:** transcripts reach 30 MB. On first open read only the
@@ -98,6 +99,30 @@ for the few things transcripts can't show. Three layers feed one session state:
 - **Tests:** add fixture transcripts per agent under
   `apps/macos/Tests/CompanionCoreTests/Fixtures/<agent>/` and test the state
   mapping against them.
+
+## Plan usage
+
+Usage (5h, weekly, monthly limits) is fetched natively in
+`apps/macos/Sources/CompanionCore/Usage/`, one `UsageProvider` per agent, ported from
+`reference/codexbar`. There is no CodexBar binary or other helper.
+
+- **Supported now: Claude, Codex and Kiro only.** Settings offers just these three. Other agents
+  get usage later, one provider at a time, ported the same way.
+- **Read the agent's own sign-in, read-only.** Claude: `~/.claude/.credentials.json` or the
+  `Claude Code-credentials` keychain item, read with `/usr/bin/security find-generic-password -w`
+  (Claude Code writes the item with that tool, so reading it this way doesn't prompt). Codex:
+  `~/.codex/auth.json`. Kiro: kiro-cli's SQLite database, opened with `immutable=1` so no lock or
+  journal file is created.
+- **Never refresh tokens.** Refresh tokens rotate; redeeming one without writing it back logs the
+  agent out. Check the token's expiry first and show "Sign-in expired. Run <agent> to refresh it"
+  instead of sending the request.
+- **Always try the agent's credential store.** CodexBar only reads Claude Code's keychain item
+  behind a default-off setting, so its CLI reported "credentials not found" for signed-in users.
+  Don't gate credential reads behind settings or prompts.
+- **No placeholder windows.** If the response has no limits, report "No plan limits reported".
+  Never invent a 0% window; CodexBar's web source did, and the panel showed 0% for a busy account.
+- Decode leniently (unknown fields ignored, one bad entry skipped) and test each provider's mapping
+  against trimmed real responses in `UsageTests.swift`.
 
 ## Remote machines
 

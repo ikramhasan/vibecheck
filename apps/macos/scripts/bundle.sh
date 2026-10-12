@@ -7,13 +7,12 @@ cd "$(dirname "$0")/.."
 VERSION="${1:-0.0.0}"
 
 swift build -c release
-scripts/fetch-codexbar.sh
 scripts/build-diff-viewer.sh
 BIN="$(swift build -c release --show-bin-path)/Vibecheck"
 APP="build/vibecheck.app"
 
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Helpers" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 cp "$BIN" "$APP/Contents/MacOS/Vibecheck"
 ditto "$(dirname "$BIN")/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
 install_name_tool -add_rpath @executable_path/../Frameworks "$APP/Contents/MacOS/Vibecheck"
@@ -21,9 +20,6 @@ cp Icon/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 # SwiftPM resources (provider icons).
 cp -R "$(dirname "$BIN")/Vibecheck_Vibecheck.bundle" "$APP/Contents/Resources/"
 cp -R vendor/diff-viewer "$APP/Contents/Resources/DiffViewer"
-# CodexBar CLI finds its resource bundle next to itself, so they travel together.
-cp vendor/codexbar/CodexBarCLI "$APP/Contents/Helpers/CodexBarCLI"
-cp -R vendor/codexbar/CodexBar_CodexBarCore.bundle "$APP/Contents/Helpers/"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -49,9 +45,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# Sign nested code inside-out, then the app (no --deep: it's deprecated and unordered).
-codesign --force --sign - "$APP/Contents/Helpers/CodexBar_CodexBarCore.bundle" >/dev/null 2>&1
-codesign --force --sign - "$APP/Contents/Helpers/CodexBarCLI" >/dev/null 2>&1
+# Ad-hoc sign the app (no --deep: it's deprecated and unordered).
 codesign --force --sign - "$APP" >/dev/null 2>&1
 codesign --verify --strict "$APP"
 echo "Built $(pwd)/$APP"
