@@ -23,7 +23,7 @@ private func timeline(_ path: String, _ format: TranscriptFormat) throws -> Sess
         #expect(t.lastReply == "Fixed it.")
         #expect(t.title == "Login redirect fix")
         #expect(t.model == "claude-opus-5-5")
-        #expect(t.context == .init(usedTokens: 150_510, windowTokens: 200_000))
+        #expect(t.context == .init(usedTokens: 150_510, windowTokens: 1_000_000))
         #expect(t.activity == nil)
     }
 
@@ -62,10 +62,20 @@ private func timeline(_ path: String, _ format: TranscriptFormat) throws -> Sess
         #expect(t.activity == "Compacting…")
     }
 
-    @Test func largeContextSwitchesToMillionTokenWindow() {
-        var t = SessionTimeline()
-        t.apply(.contextUsage(usedTokens: 250_000, windowTokens: nil))
-        #expect(t.context?.windowTokens == 1_000_000)
+    @Test func currentModelsHaveMillionTokenWindow() {
+        #expect(SessionTimeline.claudeWindow(model: "claude-opus-5-5", usedTokens: 50_000) == 1_000_000)
+        #expect(SessionTimeline.claudeWindow(model: "claude-haiku-5-5", usedTokens: 50_000) == 1_000_000)
+        #expect(SessionTimeline.claudeWindow(model: nil, usedTokens: 50_000) == 1_000_000)
+    }
+
+    @Test func legacyModelsHaveTwoHundredThousandTokenWindow() {
+        #expect(SessionTimeline.claudeWindow(model: "claude-haiku-4-5-20251001", usedTokens: 50_000) == 200_000)
+        #expect(SessionTimeline.claudeWindow(model: "claude-sonnet-4-20250514", usedTokens: 50_000) == 200_000)
+        #expect(SessionTimeline.claudeWindow(model: "claude-3-7-sonnet-20250219", usedTokens: 50_000) == 200_000)
+    }
+
+    @Test func legacyModelOverTwoHundredThousandTokensUsesMillionTokenWindow() {
+        #expect(SessionTimeline.claudeWindow(model: "claude-sonnet-4-5", usedTokens: 250_000) == 1_000_000)
     }
 }
 
