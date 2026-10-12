@@ -33,6 +33,7 @@ public final class RemoteSessionSource: SessionSource {
     @ObservationIgnored public var onChange: (([AgentSession]) -> Void)?
 
     static let firstRetryDelay: TimeInterval = 2
+    static let checkoutRetryDelay: TimeInterval = 30
     static let maxRetryDelay: TimeInterval = 60
     private nonisolated static let environment = ShellEnvironment.capture()
 
@@ -51,6 +52,7 @@ public final class RemoteSessionSource: SessionSource {
     @ObservationIgnored private var hostAddress: String?
     @ObservationIgnored private var configuredHostname: String?
     @ObservationIgnored private var checkouts: [String: String] = [:]
+    @ObservationIgnored private var notCheckouts: [String: Date] = [:]
     @ObservationIgnored private var resolvingCheckouts: Set<String> = []
     @ObservationIgnored private var unsupported = false
 
@@ -227,6 +229,8 @@ public final class RemoteSessionSource: SessionSource {
         failQueries()
         sessions = RemoteSessions(host: host.alias)
         servers = []
+        checkouts = [:]
+        notCheckouts = [:]
         settle?.cancel()
         publish()
         scheduleRetry()
@@ -246,11 +250,12 @@ public final class RemoteSessionSource: SessionSource {
     private func publish() {
         var next = sessions.sessions(sshPID: localSSH())
         for index in next.indices {
-            guard let checkout = checkouts[next[index].cwd] else {
-                resolveCheckout(of: next[index].cwd)
-                continue
+            let cwd = next[index].cwd
+            if let checkout = checkouts[cwd] {
+                next[index].remoteCheckout = checkout
+            } else if notCheckouts[cwd].map({ -$0.timeIntervalSinceNow >= Self.checkoutRetryDelay }) ?? true {
+                resolveCheckout(of: cwd)
             }
-            next[index].remoteCheckout = checkout.isEmpty ? nil : checkout
         }
         guard next != last else { return }
         last = next
@@ -263,9 +268,14 @@ public final class RemoteSessionSource: SessionSource {
             let output = await query("toplevel", in: cwd)
             resolvingCheckouts.remove(cwd)
             guard let output else { return }
-            checkouts[cwd] = output.status == 0
-                ? String(decoding: output.stdout, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines) : ""
-            publish()
+            let checkout = String(decoding: output.stdout, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+            if output.status == 0, !checkout.isEmpty {
+                checkouts[cwd] = checkout
+                notCheckouts[cwd] = nil
+                publish()
+            } else {
+                notCheckouts[cwd] = .now
+            }
         }
     }
 
