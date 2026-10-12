@@ -220,7 +220,7 @@ private struct ServerRow: View {
     }
 }
 
-private struct RowAction: View {
+struct RowAction: View {
     let systemImage: String
     let label: String
     let action: () -> Void

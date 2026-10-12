@@ -30,6 +30,7 @@ struct EdgePanelView: View {
     let store: SessionStore
     let usage: UsageStore
     let servers: DevServerStore
+    let actions: ActionStore
     let state: PanelState
     let onSelectTab: (PanelPage) -> Void
     let onOpenSettings: () -> Void
@@ -38,6 +39,10 @@ struct EdgePanelView: View {
     let onClearCompleted: () -> Void
     let onDismiss: (AgentSession) -> Void
     let onShowServers: (AgentSession) -> Void
+    let onEditAction: (QuickAction?) -> Void
+    let onSaveAction: (QuickAction) -> Void
+    let onShowActionLog: (ActionRunKey) -> Void
+    let onCloseActionPage: () -> Void
     let onQuit: () -> Void
     @Environment(AppSettings.self) private var settings
 
@@ -46,10 +51,11 @@ struct EdgePanelView: View {
     private var shown: [AgentSession] { state.completed.visible(store.sessions) }
     private var count: Int { shown.count }
     private var onSettings: Bool { state.page == .settings }
-    private var onServers: Bool { state.page == .servers }
+    private var covered: Bool { state.page.coversTabs }
     private var groups: [SessionGroup] { ProjectIcons.shared.groups(shown) }
     private var asking: [AgentSession] { store.sessions.filter { state.pendingAttentionIDs.contains($0.id) } }
-    private var showsQuestions: Bool { !onSettings && !asking.isEmpty }
+    private var showsQuestions: Bool { !state.page.pinsPanel && !asking.isEmpty }
+    private var sessionProjects: [ProjectInfo] { ProjectIcons.shared.groups(store.sessions).map(\.project) }
 
     var body: some View {
         let groups = groups
@@ -70,23 +76,38 @@ struct EdgePanelView: View {
             // Both pages stay mounted so their items can cascade past each other.
             ZStack(alignment: .top) {
                 ExpandedContent(groups: groups, sessionCount: count, usage: usage.usage,
-                                servers: servers.servers, sessions: store.sessions,
+                                servers: servers.servers, sessions: store.sessions, actions: actions,
                                 serversOfSessionID: state.serversOfSessionID,
-                                tab: onServers ? .servers : .sessions,
+                                tab: state.page.tab,
                                 clearableCount: state.completed.clearableCount(store.sessions),
                                 pendingIDs: state.pendingAttentionIDs,
-                                isShown: expanded && !onSettings && !showsQuestions,
-                                hiddenSide: onSettings ? .leading : .trailing,
+                                isShown: expanded && !covered && !showsQuestions,
+                                hiddenSide: covered ? .leading : .trailing,
                                 paced: state.pageChanging,
                                 onSelectTab: onSelectTab, onOpenSettings: onOpenSettings,
                                 onClearCompleted: onClearCompleted, onDismiss: onDismiss,
                                 onShowServers: onShowServers,
-                                onStopServer: servers.stopServer, onQuit: onQuit)
-                    .frame(height: onServers ? ServerMetrics.pageHeight(servers.servers.count)
-                           : PanelMetrics.expandedHeight(groups: groups, usage: usage.usage), alignment: .top)
+                                onStopServer: servers.stopServer, onEditAction: onEditAction,
+                                onShowActionLog: onShowActionLog, onQuit: onQuit)
+                    .frame(height: tabHeight(groups), alignment: .top)
                     .opacity(showsQuestions ? 0 : 1)
-                    .allowsHitTesting(!onSettings && !showsQuestions)
-                    .accessibilityHidden(onSettings || showsQuestions)
+                    .allowsHitTesting(!covered && !showsQuestions)
+                    .accessibilityHidden(covered || showsQuestions)
+
+                ActionEditorPage(editing: state.editingAction, projects: sessionProjects,
+                                 isShown: expanded && state.page == .actionEditor, paced: state.pageChanging,
+                                 onSave: onSaveAction, onClose: onCloseActionPage)
+                    .frame(height: ActionMetrics.editorHeight)
+                    .allowsHitTesting(state.page == .actionEditor)
+                    .accessibilityHidden(state.page != .actionEditor)
+
+                ActionLogPage(store: actions, runKey: state.loggedRun,
+                              isShown: expanded && state.page == .actionLog && !showsQuestions,
+                              paced: state.pageChanging, onBack: onCloseActionPage)
+                    .frame(height: ActionMetrics.logHeight)
+                    .opacity(showsQuestions ? 0 : 1)
+                    .allowsHitTesting(state.page == .actionLog && !showsQuestions)
+                    .accessibilityHidden(state.page != .actionLog || showsQuestions)
 
                 QuestionPage(sessions: asking, isShown: expanded && showsQuestions, onShowAll: onShowAll)
                     .frame(height: QuestionMetrics.pageHeight(asking), alignment: .top)
@@ -116,10 +137,22 @@ struct EdgePanelView: View {
     }
 
     private func pageHeight(_ groups: [SessionGroup]) -> CGFloat {
-        if onSettings { return PanelMetrics.settingsHeight }
+        switch state.page {
+        case .settings: return PanelMetrics.settingsHeight
+        case .actionEditor: return ActionMetrics.editorHeight
+        default: break
+        }
         if showsQuestions { return QuestionMetrics.pageHeight(asking) }
-        if onServers { return ServerMetrics.pageHeight(servers.servers.count) }
-        return PanelMetrics.expandedHeight(groups: groups, usage: usage.usage)
+        if state.page == .actionLog { return ActionMetrics.logHeight }
+        return tabHeight(groups)
+    }
+
+    private func tabHeight(_ groups: [SessionGroup]) -> CGFloat {
+        switch state.page.tab {
+        case .servers: ServerMetrics.pageHeight(servers.servers.count)
+        case .actions: ActionMetrics.pageHeight(ActionRowItem.all(actions).count)
+        default: PanelMetrics.expandedHeight(groups: groups, usage: usage.usage)
+        }
     }
 }
 
@@ -243,6 +276,7 @@ private struct ExpandedContent: View {
     let usage: [ProviderUsage]
     let servers: [DevServer]
     let sessions: [AgentSession]
+    let actions: ActionStore
     let serversOfSessionID: String?
     let tab: PanelPage
     let clearableCount: Int
@@ -258,13 +292,24 @@ private struct ExpandedContent: View {
     let onDismiss: (AgentSession) -> Void
     let onShowServers: (AgentSession) -> Void
     let onStopServer: (DevServer) -> Void
+    let onEditAction: (QuickAction?) -> Void
+    let onShowActionLog: (ActionRunKey) -> Void
     let onQuit: () -> Void
 
     @Namespace private var glass
 
+    private var onSessions: Bool { tab == .sessions }
     private var onServers: Bool { tab == .servers }
-    private var sessionsShown: Bool { isShown && !onServers }
-    private var sessionsSide: HorizontalEdge { onServers ? .leading : hiddenSide }
+    private var onActions: Bool { tab == .actions }
+    private var sessionsShown: Bool { isShown && onSessions }
+    private var sessionsSide: HorizontalEdge { onSessions ? hiddenSide : .leading }
+    private var serversSide: HorizontalEdge {
+        switch tab {
+        case .servers: hiddenSide
+        case .actions: .leading
+        default: .trailing
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -273,11 +318,14 @@ private struct ExpandedContent: View {
 
             ZStack(alignment: .top) {
                 sessionsSection
-                    .allowsHitTesting(!onServers)
-                    .accessibilityHidden(onServers)
+                    .allowsHitTesting(onSessions)
+                    .accessibilityHidden(!onSessions)
                 serverSection
                     .allowsHitTesting(onServers)
                     .accessibilityHidden(!onServers)
+                actionSection
+                    .allowsHitTesting(onActions)
+                    .accessibilityHidden(!onActions)
             }
             Spacer(minLength: 0)
         }
@@ -308,7 +356,7 @@ private struct ExpandedContent: View {
 
     private var serverSection: some View {
         let list = ServerList(servers: servers, sessions: sessions, highlightedSessionID: serversOfSessionID, shown: isShown && onServers,
-                              side: onServers ? hiddenSide : .trailing, paced: paced, onStop: onStopServer)
+                              side: serversSide, paced: paced, onStop: onStopServer)
         return Group {
             if ServerMetrics.listContentHeight(servers.count) > PanelMetrics.maxListHeight {
                 ScrollView(.vertical) { list }
@@ -320,23 +368,43 @@ private struct ExpandedContent: View {
         .frame(height: ServerMetrics.listHeight(servers.count), alignment: .top)
     }
 
+    private var actionSection: some View {
+        let rowCount = ActionRowItem.all(actions).count
+        let list = ActionList(store: actions, shown: isShown && onActions, side: onActions ? hiddenSide : .trailing, paced: paced,
+                              onNew: { onEditAction(nil) }, onEdit: onEditAction, onShowLog: onShowActionLog)
+        return Group {
+            if ActionMetrics.listContentHeight(rowCount) > PanelMetrics.maxListHeight {
+                ScrollView(.vertical) { list }
+                    .scrollIndicators(.never)
+            } else {
+                list
+            }
+        }
+        .frame(height: ActionMetrics.listHeight(rowCount), alignment: .top)
+    }
+
     private var waitingCount: Int {
         groups.reduce(0) { $0 + $1.sessions.filter(\.needsAttention).count }
     }
 
     private var header: some View {
         HStack(spacing: 2) {
-            TabButton(title: "Agents", count: sessionCount, waiting: waitingCount, selected: !onServers,
+            TabButton(title: "Agents", count: sessionCount, waiting: waitingCount, selected: onSessions,
                       namespace: glass) {
                 onSelectTab(.sessions)
             }
             TabButton(title: "Servers", count: servers.count, selected: onServers, namespace: glass) {
                 onSelectTab(.servers)
             }
+            TabButton(title: "Actions", systemImage: "bolt.fill",
+                      count: actions.running.isEmpty ? nil : actions.running.count,
+                      selected: onActions, namespace: glass) {
+                onSelectTab(.actions)
+            }
             Spacer()
             GlassEffectContainer(spacing: 4) {
                 HStack(spacing: 4) {
-                    if clearableCount > 0 && !onServers {
+                    if clearableCount > 0 && onSessions {
                         HeaderButton(systemImage: "checkmark", label: "Clear completed from the edge tab",
                                      action: onClearCompleted)
                             .glassEffectID("clear", in: glass)
@@ -347,7 +415,7 @@ private struct ExpandedContent: View {
                         .glassEffectID("quit", in: glass)
                 }
             }
-            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: clearableCount > 0 && !onServers)
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: clearableCount > 0 && onSessions)
         }
         .frame(height: PanelMetrics.headerHeight)
         .padding(.horizontal, 10)
@@ -369,8 +437,9 @@ private struct ExpandedContent: View {
                         .frame(height: PanelMetrics.groupDivider)
                         .cascade(shown: sessionsShown, index: index, side: sessionsSide, paced: paced)
                 }
-                ProjectGroupView(group: group, pendingIDs: pendingIDs, servers: servers, onDismiss: onDismiss,
-                                 onShowServers: onShowServers)
+                ProjectGroupView(group: group, pendingIDs: pendingIDs, servers: servers, actions: actions,
+                                 onDismiss: onDismiss, onShowServers: onShowServers,
+                                 onShowActionLog: onShowActionLog)
                     .frame(height: PanelMetrics.groupHeight(group), alignment: .top)
                     // Small stagger so groups settle in after the card lands, and leave
                     // one by one when Settings takes over.
@@ -404,7 +473,8 @@ private struct HeaderButton: View {
 
 private struct TabButton: View {
     let title: String
-    let count: Int
+    var systemImage: String?
+    let count: Int?
     var waiting = 0
     let selected: Bool
     let namespace: Namespace.ID
@@ -413,17 +483,55 @@ private struct TabButton: View {
 
     var body: some View {
         Button(action: action) {
+            label
+                .frame(height: 28)
+                .background {
+                    if selected {
+                        Color.clear
+                            .glassEffect(.regular.interactive(), in: .capsule)
+                            .matchedGeometryEffect(id: "tabSelection", in: namespace)
+                    }
+                }
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .onHover { h in withAnimation(.easeOut(duration: 0.12)) { hovering = h } }
+        .help(systemImage == nil ? "" : title)
+        .accessibilityLabel(accessibilityText)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private var tint: HierarchicalShapeStyle { selected ? .primary : hovering ? .secondary : .tertiary }
+
+    @ViewBuilder private var label: some View {
+        if let systemImage {
+            Image(systemName: systemImage)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 28)
+                .overlay(alignment: .topTrailing) {
+                    if let count {
+                        Text("\(count)")
+                            .font(.system(size: 8.5, weight: .bold).monospacedDigit())
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 3.5)
+                            .frame(minWidth: 13, minHeight: 13)
+                            .background(Capsule().fill(Color.blue))
+                            .offset(x: 1, y: -1)
+                    }
+                }
+        } else {
             HStack(spacing: 6) {
                 Text(title)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(selected ? HierarchicalShapeStyle.primary : hovering ? .secondary : .tertiary)
+                    .foregroundStyle(tint)
                 if waiting > 0 {
                     Text("\(waiting) waiting")
                         .font(.system(size: 11, weight: .medium).monospacedDigit())
                         .foregroundStyle(Color.orange)
                         .padding(.horizontal, 6).padding(.vertical, 1)
                         .background(Capsule().fill(Color.orange.opacity(0.14)))
-                } else {
+                } else if let count {
                     Text("\(count)")
                         .font(.system(size: 11, weight: .medium).monospacedDigit())
                         .foregroundStyle(selected ? HierarchicalShapeStyle.secondary : .tertiary)
@@ -432,21 +540,13 @@ private struct TabButton: View {
                 }
             }
             .fixedSize()
-            .padding(.horizontal, 8)
-            .frame(height: 28)
-            .background {
-                if selected {
-                    Color.clear
-                        .glassEffect(.regular.interactive(), in: .capsule)
-                        .matchedGeometryEffect(id: "tabSelection", in: namespace)
-                }
-            }
-            .contentShape(Capsule())
+            .padding(.horizontal, 6)
         }
-        .buttonStyle(.plain)
-        .onHover { h in withAnimation(.easeOut(duration: 0.12)) { hovering = h } }
-        .accessibilityLabel(waiting > 0 ? "\(title), \(count), \(waiting) waiting" : "\(title), \(count)")
-        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private var accessibilityText: String {
+        let counted = count.map { "\(title), \($0)" } ?? title
+        return waiting > 0 ? "\(counted), \(waiting) waiting" : counted
     }
 }
 
@@ -480,10 +580,17 @@ private struct ProjectGroupView: View {
     let group: SessionGroup
     let pendingIDs: Set<String>
     let servers: [DevServer]
+    let actions: ActionStore
     let onDismiss: (AgentSession) -> Void
     let onShowServers: (AgentSession) -> Void
+    let onShowActionLog: (ActionRunKey) -> Void
+
+    private var projectActions: [QuickAction] {
+        actions.actions.filter { ProjectIcons.shared.project(for: $0.directory).root == group.project.root }
+    }
 
     var body: some View {
+        let projectActions = projectActions
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 ProjectBadge(project: group.project, size: 18)
@@ -507,11 +614,28 @@ private struct ProjectGroupView: View {
             ForEach(group.sessions) { session in
                 SessionLine(session: session, highlighted: pendingIDs.contains(session.id),
                             servers: servers.filter { $0.wasStarted(by: session) },
-                            onDismiss: { onDismiss(session) }, onShowServers: { onShowServers(session) })
+                            projectActions: projectActions,
+                            actionRun: { actions.run(for: $0, in: directory(of: $0, for: session)) },
+                            onDismiss: { onDismiss(session) }, onShowServers: { onShowServers(session) },
+                            onAction: { trigger($0, for: session) })
             }
         }
         .padding(.vertical, PanelMetrics.groupPadding / 2)
         .padding(.horizontal, 6)
+    }
+
+    private func directory(of action: QuickAction, for session: AgentSession) -> String {
+        let resolver = ProjectIcons.shared.resolver
+        return resolver.path(action.directory, inCheckout: resolver.checkout(for: session.cwd))
+    }
+
+    private func trigger(_ action: QuickAction, for session: AgentSession) {
+        let directory = directory(of: action, for: session)
+        if actions.run(for: action, in: directory)?.isRunning == true {
+            onShowActionLog(ActionRunKey(actionID: action.id, directory: directory))
+        } else {
+            actions.run(action, in: directory)
+        }
     }
 }
 
@@ -521,8 +645,11 @@ private struct SessionLine: View {
     let session: AgentSession
     let highlighted: Bool
     let servers: [DevServer]
+    let projectActions: [QuickAction]
+    let actionRun: (QuickAction) -> ActionRun?
     let onDismiss: () -> Void
     let onShowServers: () -> Void
+    let onAction: (QuickAction) -> Void
     @State private var hovering = false
     @State private var target: JumpTarget?
 
@@ -587,6 +714,11 @@ private struct SessionLine: View {
         .accessibilityAction { SessionJumper.jump(to: session) }
         .accessibilityAction(named: "Dismiss") { if dismissible { onDismiss() } }
         .accessibilityAction(named: "Show servers") { if !servers.isEmpty { onShowServers() } }
+        .accessibilityActions {
+            ForEach(projectActions) { action in
+                Button(label(for: action)) { onAction(action) }
+            }
+        }
     }
 
     private var rowGlass: Glass {
@@ -595,7 +727,21 @@ private struct SessionLine: View {
     }
 
     private var dismissible: Bool { CompletedFilter.isCompleted(session) }
-    private var actionCount: Int { (servers.isEmpty ? 0 : 1) + (dismissible ? 1 : 0) }
+    private var actionCount: Int { (servers.isEmpty ? 0 : 1) + (projectActions.isEmpty ? 0 : 1) + (dismissible ? 1 : 0) }
+    private var anyActionRunning: Bool { projectActions.contains { actionRun($0)?.isRunning == true } }
+
+    private func label(for action: QuickAction) -> String {
+        actionRun(action)?.isRunning == true ? "Show output of \(action.name)" : "Run \(action.name)"
+    }
+
+    @ViewBuilder private var actionIcon: some View {
+        if anyActionRunning {
+            ProgressView().controlSize(.mini)
+        } else {
+            Image(systemName: projectActions.count == 1 ? "play.fill" : "bolt.fill")
+                .font(.system(size: 8.5, weight: .bold))
+        }
+    }
     private var showsActions: Bool { hovering && actionCount > 0 }
 
     private var actionsWidth: CGFloat {
@@ -616,6 +762,29 @@ private struct SessionLine: View {
                              action: onShowServers) {
                     PromptGlyph(size: 9, lineWidth: 1.4)
                 }
+            }
+            if projectActions.count == 1, let action = projectActions.first {
+                CircleButton(label: label(for: action), help: label(for: action), action: { onAction(action) }) {
+                    actionIcon
+                }
+            } else if !projectActions.isEmpty {
+                Menu {
+                    ForEach(projectActions) { action in
+                        Button(label(for: action)) { onAction(action) }
+                    }
+                } label: {
+                    actionIcon
+                        .foregroundStyle(.secondary)
+                        .frame(width: CircleButton<EmptyView>.size, height: CircleButton<EmptyView>.size)
+                        .contentShape(Circle())
+                }
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .glassEffect(.regular.interactive(), in: .circle)
+                .help("Actions")
+                .accessibilityLabel("Actions")
             }
             if dismissible {
                 CircleButton(label: "Dismiss", help: "Dismiss", action: onDismiss) {

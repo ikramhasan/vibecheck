@@ -70,21 +70,45 @@ public final class ProjectResolver: @unchecked Sendable {
         return info
     }
 
+    public func checkout(for path: String) -> String {
+        let path = (path as NSString).standardizingPath
+        return gitDirectory(above: path).map { ($0 as NSString).deletingLastPathComponent } ?? path
+    }
+
+    public func mainCheckoutPath(for path: String) -> String {
+        Self.relocate(path, from: checkout(for: path), to: project(for: path).root)
+    }
+
+    public func path(_ path: String, inCheckout target: String) -> String {
+        Self.relocate(path, from: checkout(for: path), to: (target as NSString).standardizingPath)
+    }
+
+    static func relocate(_ path: String, from source: String, to target: String) -> String {
+        let path = (path as NSString).standardizingPath
+        guard path == source || path.hasPrefix(source + "/") else { return path }
+        return target + path.dropFirst(source.count)
+    }
+
     private func resolve(_ path: String) -> ProjectInfo {
+        guard let git = gitDirectory(above: path) else { return ProjectInfo(root: path, name: displayName(path)) }
+        let dir = (git as NSString).deletingLastPathComponent
+        var isDir: ObjCBool = false
+        fileManager.fileExists(atPath: git, isDirectory: &isDir)
+        let root = isDir.boolValue ? dir : (mainCheckout(gitFile: git) ?? dir)
+        return ProjectInfo(root: root, name: displayName(root))
+    }
+
+    private func gitDirectory(above path: String) -> String? {
         var dir = path
         // A dotfiles repo at $HOME must not swallow every project under it.
         while dir != home {
             let git = (dir as NSString).appendingPathComponent(".git")
-            var isDir: ObjCBool = false
-            if fileManager.fileExists(atPath: git, isDirectory: &isDir) {
-                let root = isDir.boolValue ? dir : (mainCheckout(gitFile: git) ?? dir)
-                return ProjectInfo(root: root, name: displayName(root))
-            }
+            if fileManager.fileExists(atPath: git) { return git }
             let parent = (dir as NSString).deletingLastPathComponent
-            if parent == dir { break }
+            if parent == dir { return nil }
             dir = parent
         }
-        return ProjectInfo(root: path, name: displayName(path))
+        return nil
     }
 
     /// A linked worktree's `.git` is a file: `gitdir: <main>/.git/worktrees/<name>`.

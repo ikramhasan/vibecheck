@@ -4,7 +4,22 @@ import SwiftUI
 enum PanelPage: Equatable {
     case sessions
     case servers
+    case actions
+    case actionEditor
+    case actionLog
     case settings
+
+    var coversTabs: Bool { [.actionEditor, .actionLog, .settings].contains(self) }
+
+    var pinsPanel: Bool { [.actionEditor, .settings].contains(self) }
+
+    var tab: PanelPage {
+        switch self {
+        case .servers: .servers
+        case .actions, .actionEditor, .actionLog: .actions
+        case .sessions, .settings: .sessions
+        }
+    }
 }
 
 /// One item in a staggered page change. Items of the leaving page slide out toward

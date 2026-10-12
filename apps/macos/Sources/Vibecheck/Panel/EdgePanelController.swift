@@ -83,6 +83,8 @@ final class PanelState {
     /// Session ids whose attention request hasn't been seen yet (highlighted rows).
     var pendingAttentionIDs: Set<String> = []
     var serversOfSessionID: String?
+    var editingAction: QuickAction?
+    var loggedRun: ActionRunKey?
     var completed = CompletedFilter()
 }
 
@@ -120,6 +122,7 @@ final class EdgePanelController {
     private let store: SessionStore
     private let usage: UsageStore
     private let servers: DevServerStore
+    private let actions: ActionStore
     private let settings: AppSettings
     private let state = PanelState()
     private let panel: EdgePanel
@@ -138,14 +141,16 @@ final class EdgePanelController {
     /// Height the window is currently sized for. Grows immediately, shrinks after animations settle.
     private var sizedForHeight: CGFloat = 0
 
-    init(store: SessionStore, usage: UsageStore, servers: DevServerStore, settings: AppSettings) {
+    init(store: SessionStore, usage: UsageStore, servers: DevServerStore, actions: ActionStore,
+         settings: AppSettings) {
         self.store = store
         self.usage = usage
         self.servers = servers
+        self.actions = actions
         self.settings = settings
         panel = EdgePanel(contentRect: .zero)
 
-        let root = EdgePanelView(store: store, usage: usage, servers: servers, state: state,
+        let root = EdgePanelView(store: store, usage: usage, servers: servers, actions: actions, state: state,
                                  onSelectTab: { [weak self] in self?.showPage($0) },
                                  onOpenSettings: { [weak self] in self?.showPage(.settings) },
                                  onCloseSettings: { [weak self] in self?.showPage(.sessions) },
@@ -153,6 +158,10 @@ final class EdgePanelController {
                                  onClearCompleted: { [weak self] in self?.clearCompleted() },
                                  onDismiss: { [weak self] in self?.dismiss($0) },
                                  onShowServers: { [weak self] in self?.showServers(of: $0) },
+                                 onEditAction: { [weak self] in self?.editAction($0) },
+                                 onSaveAction: { [weak self] in self?.saveAction($0) },
+                                 onShowActionLog: { [weak self] in self?.showLog(of: $0) },
+                                 onCloseActionPage: { [weak self] in self?.showPage(.actions) },
                                  onQuit: { NSApp.terminate(nil) })
             .environment(settings)
         let hosting = FirstClickHostingView(rootView: root)
@@ -161,6 +170,7 @@ final class EdgePanelController {
 
         store.onChange = { [weak self] sessions in self?.sessionsChanged(sessions) }
         servers.onChange = { [weak self] _ in self?.contentChanged() }
+        actions.onChange = { [weak self] in self?.contentChanged() }
         usage.onChange = { [weak self] _ in
             guard let self else { return }
             self.contentChanged()
@@ -168,16 +178,27 @@ final class EdgePanelController {
             self.apply(attentionArrived: false)
         }
 
-        // Clicking into another app leaves Settings. Our own popovers and menus take key
-        // too, so only go back when focus left the app entirely.
+        // Clicking into another app leaves Settings or the action editor. Our own popovers,
+        // menus and the folder picker take key too, so only go back when focus left the app.
         NotificationCenter.default.addObserver(
             forName: NSWindow.didResignKeyNotification, object: panel, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 DispatchQueue.main.async {
-                    guard let self, self.state.page == .settings, NSApp.keyWindow == nil,
+                    guard let self, self.state.page.pinsPanel, NSApp.keyWindow == nil,
                           !self.panel.isKeyWindow else { return }
-                    self.showPage(.sessions)
+                    self.showPage(self.state.page == .settings ? .sessions : .actions)
+                }
+            }
+        }
+
+        for (name, tracking) in [(NSMenu.didBeginTrackingNotification, true),
+                                 (NSMenu.didEndTrackingNotification, false)] {
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.presentation.setPinned(tracking || self.state.page.pinsPanel)
+                    self.apply(attentionArrived: false)
                 }
             }
         }
@@ -214,12 +235,12 @@ final class EdgePanelController {
         }
         contentChanged() // window grows now / shrinks after the cascade, per the new page
         servers.setVisible(page == .servers)
-        presentation.setPinned(page == .settings)
+        presentation.setPinned(page.pinsPanel)
         apply(attentionArrived: false)
 
-        if page == .settings {
+        if page.pinsPanel {
             panel.makeKey()
-            usage.refreshIfStale()
+            if page == .settings { usage.refreshIfStale() }
         } else if panel.isKeyWindow {
             panel.resignKey()
         }
@@ -232,6 +253,21 @@ final class EdgePanelController {
     private func showServers(of session: AgentSession) {
         showPage(.servers)
         state.serversOfSessionID = session.id
+    }
+
+    private func editAction(_ action: QuickAction?) {
+        state.editingAction = action ?? QuickAction()
+        showPage(.actionEditor)
+    }
+
+    private func saveAction(_ action: QuickAction) {
+        actions.save(action)
+        showPage(.actions)
+    }
+
+    private func showLog(of run: ActionRunKey) {
+        state.loggedRun = run
+        showPage(.actionLog)
     }
 
     private func clearCompleted() {
@@ -295,12 +331,21 @@ final class EdgePanelController {
     }
 
     private var targetHeight: CGFloat {
-        if state.page == .settings { return PanelMetrics.settingsHeight }
+        switch state.page {
+        case .settings: return PanelMetrics.settingsHeight
+        case .actionEditor: return ActionMetrics.editorHeight
+        default: break
+        }
         let asking = store.sessions.filter { state.pendingAttentionIDs.contains($0.id) }
         if !asking.isEmpty { return QuestionMetrics.pageHeight(asking) }
-        if state.page == .servers { return ServerMetrics.pageHeight(servers.servers.count) }
-        return PanelMetrics.expandedHeight(groups: ProjectIcons.shared.groups(state.completed.visible(store.sessions)),
-                                           usage: usage.usage)
+        switch state.page {
+        case .servers: return ServerMetrics.pageHeight(servers.servers.count)
+        case .actions: return ActionMetrics.pageHeight(ActionRowItem.all(actions).count)
+        case .actionLog: return ActionMetrics.logHeight
+        default:
+            return PanelMetrics.expandedHeight(groups: ProjectIcons.shared.groups(state.completed.visible(store.sessions)),
+                                               usage: usage.usage)
+        }
     }
 
     // MARK: - Layout
@@ -417,7 +462,7 @@ final class EdgePanelController {
         if target != .hidden, !panel.isVisible { panel.orderFrontRegardless() }
 
         withAnimation(animation) { state.mode = target }
-        if target != .expanded && state.page == .servers {
+        if target != .expanded && state.page != .sessions {
             state.page = .sessions
             state.serversOfSessionID = nil
             servers.setVisible(false)
