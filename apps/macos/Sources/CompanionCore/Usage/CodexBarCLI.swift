@@ -55,54 +55,19 @@ public struct CodexBarCLI: Sendable {
     public static let costProviders: Set<String> = ["claude", "codex", "cursor", "antigravity", "muse", "pi"]
 
     func run(_ arguments: [String]) async throws -> Data {
-        let executable = executable
-        let timeout = timeout
-        return try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .utility).async {
-                continuation.resume(with: Result { try Self.runSync(executable, arguments, timeout: timeout) })
-            }
-        }
-    }
-
-    private static func runSync(_ executable: URL, _ arguments: [String], timeout: TimeInterval) throws -> Data {
-        let process = Process()
-        process.executableURL = executable
-        process.arguments = arguments
-        process.standardInput = FileHandle.nullDevice
-        let out = Pipe(), err = Pipe()
-        process.standardOutput = out
-        process.standardError = err
-
-        do { try process.run() } catch { throw Failure.notFound }
-
-        // Drain both pipes concurrently so a chatty stderr can't fill its buffer and stall the child.
-        let outBox = DataBox(), errBox = DataBox()
-        let group = DispatchGroup()
-        for (pipe, box) in [(out, outBox), (err, errBox)] {
-            group.enter()
-            DispatchQueue.global().async {
-                box.data = pipe.fileHandleForReading.readDataToEndOfFile()
-                group.leave()
-            }
-        }
-
-        if group.wait(timeout: .now() + timeout) == .timedOut {
-            process.terminate()
-            _ = group.wait(timeout: .now() + 2)
+        let output: ProcessRunner.Output
+        do {
+            output = try await ProcessRunner.run(executable, arguments, timeout: timeout)
+        } catch ProcessRunner.Failure.timedOut {
             throw Failure.timedOut
+        } catch {
+            throw Failure.notFound
         }
-        process.waitUntilExit()
         // Per-provider failures come back as JSON with exit 0; only trust stdout when it parses.
-        let outData = outBox.data
-        if process.terminationStatus != 0 && outData.isEmpty {
-            let message = String(decoding: errBox.data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-            throw Failure.exited(process.terminationStatus, String(message.prefix(300)))
+        if output.status != 0 && output.stdout.isEmpty {
+            let message = String(decoding: output.stderr, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+            throw Failure.exited(output.status, String(message.prefix(300)))
         }
-        return outData
+        return output.stdout
     }
-}
-
-/// Written by exactly one reader thread, read only after `DispatchGroup.wait`.
-private final class DataBox: @unchecked Sendable {
-    var data = Data()
 }

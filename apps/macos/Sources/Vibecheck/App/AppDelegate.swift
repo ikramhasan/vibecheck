@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var usage: UsageStore?
     private var servers: DevServerStore?
     private var actions: ActionStore?
+    private var diffs: DiffStatsStore?
     private var controller: EdgePanelController?
     private var updater: AppUpdater?
     private var soundPlanner = SoundPlanner()
@@ -24,13 +25,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ? DevServerStore(agentPIDs: { [] }, scan: { _ in DemoData.servers }, terminate: { _, _ in })
             : DevServerStore(agentPIDs: { store.agentPIDs }, terminate: ServerTerminator.stop)
         let actions = args.contains("--demo") ? DemoData.actionStore() : ActionStore()
+        let diffs = args.contains("--demo")
+            ? DiffStatsStore(computer: DemoDiffStats(), repository: { $0 }, watchCheckouts: false)
+            : DiffStatsStore(computer: GitDiffStats.locate(),
+                             repository: { ProjectIcons.shared.resolver.repository(for: $0) })
         let updater = AppUpdater.bundled()
-        let controller = EdgePanelController(store: store, usage: usage, servers: servers, actions: actions,
+        let controller = EdgePanelController(store: store, usage: usage, servers: servers, actions: actions, diffs: diffs,
                                              settings: settings, updater: updater)
         self.store = store
         self.usage = usage
         self.servers = servers
         self.actions = actions
+        self.diffs = diffs
         self.controller = controller
         self.updater = updater
 
@@ -40,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         observeSessions(store) { [weak self] sessions in
             guard let self else { return }
+            diffs.update(sessions)
             for event in soundPlanner.update(sessions) { SoundPlayer.play(event, settings: settings.sounds) }
         }
         controller.show()
@@ -95,6 +102,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store?.stop()
         usage?.stop()
         servers?.stop()
+        diffs?.stop()
     }
 }
 
@@ -211,4 +219,17 @@ struct DemoUsage: UsageFetching {
     }
 
     func supportsCost(_ provider: String) -> Bool { true }
+}
+
+struct DemoDiffStats: DiffStatsComputing {
+    func baseline(in checkout: String, at date: Date?) async -> String? { "demo" }
+
+    func stats(in checkout: String, since baseline: String) async -> DiffStats? {
+        switch (checkout as NSString).lastPathComponent {
+        case "macos": DiffStats(files: 4, added: 186, removed: 41)
+        case "cli": DiffStats(files: 1, added: 3, removed: 1)
+        case "AgentCompanion": DiffStats(files: 2, added: 12, removed: 30, baselineLeftHistory: true)
+        default: DiffStats(files: 7, added: 1240, removed: 312, binaryFiles: 1)
+        }
+    }
 }

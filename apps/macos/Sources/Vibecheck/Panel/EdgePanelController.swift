@@ -141,7 +141,7 @@ final class EdgePanelController {
     /// Height the window is currently sized for. Grows immediately, shrinks after animations settle.
     private var sizedForHeight: CGFloat = 0
 
-    init(store: SessionStore, usage: UsageStore, servers: DevServerStore, actions: ActionStore,
+    init(store: SessionStore, usage: UsageStore, servers: DevServerStore, actions: ActionStore, diffs: DiffStatsStore,
          settings: AppSettings, updater: AppUpdater?) {
         self.store = store
         self.usage = usage
@@ -150,7 +150,7 @@ final class EdgePanelController {
         self.settings = settings
         panel = EdgePanel(contentRect: .zero)
 
-        let root = EdgePanelView(store: store, usage: usage, servers: servers, actions: actions, updater: updater,
+        let root = EdgePanelView(store: store, usage: usage, servers: servers, actions: actions, diffs: diffs, updater: updater,
                                  state: state,
                                  onSelectTab: { [weak self] in self?.showPage($0) },
                                  onOpenSettings: { [weak self] in self?.showPage(.settings) },

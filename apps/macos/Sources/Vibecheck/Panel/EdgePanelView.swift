@@ -31,6 +31,7 @@ struct EdgePanelView: View {
     let usage: UsageStore
     let servers: DevServerStore
     let actions: ActionStore
+    let diffs: DiffStatsStore
     let updater: AppUpdater?
     let state: PanelState
     let onSelectTab: (PanelPage) -> Void
@@ -77,7 +78,7 @@ struct EdgePanelView: View {
             // Both pages stay mounted so their items can cascade past each other.
             ZStack(alignment: .top) {
                 ExpandedContent(groups: groups, sessionCount: count, usage: usage.usage,
-                                servers: servers.servers, sessions: store.sessions, actions: actions,
+                                servers: servers.servers, sessions: store.sessions, actions: actions, diffs: diffs,
                                 serversOfSessionID: state.serversOfSessionID,
                                 tab: state.page.tab,
                                 clearableCount: state.completed.clearableCount(store.sessions),
@@ -327,6 +328,7 @@ private struct ExpandedContent: View {
     let servers: [DevServer]
     let sessions: [AgentSession]
     let actions: ActionStore
+    let diffs: DiffStatsStore
     let serversOfSessionID: String?
     let tab: PanelPage
     let clearableCount: Int
@@ -487,7 +489,7 @@ private struct ExpandedContent: View {
                         .frame(height: PanelMetrics.groupDivider)
                         .cascade(shown: sessionsShown, index: index, side: sessionsSide, paced: paced)
                 }
-                ProjectGroupView(group: group, pendingIDs: pendingIDs, servers: servers, actions: actions,
+                ProjectGroupView(group: group, pendingIDs: pendingIDs, servers: servers, actions: actions, diffs: diffs,
                                  onDismiss: onDismiss, onShowServers: onShowServers,
                                  onShowActionLog: onShowActionLog)
                     .frame(height: PanelMetrics.groupHeight(group), alignment: .top)
@@ -631,6 +633,7 @@ private struct ProjectGroupView: View {
     let pendingIDs: Set<String>
     let servers: [DevServer]
     let actions: ActionStore
+    let diffs: DiffStatsStore
     let onDismiss: (AgentSession) -> Void
     let onShowServers: (AgentSession) -> Void
     let onShowActionLog: (ActionRunKey) -> Void
@@ -665,9 +668,12 @@ private struct ProjectGroupView: View {
                 SessionLine(session: session, highlighted: pendingIDs.contains(session.id),
                             servers: servers.filter { $0.wasStarted(by: session) },
                             projectActions: projectActions,
+                            diff: diffs.stats(for: session),
+                            diffSharedWith: diffs.sessionsSharingCheckout(with: session),
                             actionRun: { actions.run(for: $0, in: directory(of: $0, for: session)) },
                             onDismiss: { onDismiss(session) }, onShowServers: { onShowServers(session) },
-                            onAction: { trigger($0, for: session) })
+                            onAction: { trigger($0, for: session) },
+                            onResetDiff: { diffs.resetBaseline(of: session) })
             }
         }
         .padding(.vertical, PanelMetrics.groupPadding / 2)
@@ -696,10 +702,13 @@ private struct SessionLine: View {
     let highlighted: Bool
     let servers: [DevServer]
     let projectActions: [QuickAction]
+    let diff: DiffStats?
+    let diffSharedWith: Int
     let actionRun: (QuickAction) -> ActionRun?
     let onDismiss: () -> Void
     let onShowServers: () -> Void
     let onAction: (QuickAction) -> Void
+    let onResetDiff: () -> Void
     @State private var hovering = false
     @State private var target: JumpTarget?
 
@@ -715,6 +724,20 @@ private struct SessionLine: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Spacer(minLength: 0)
+                if !showsActions {
+                    HStack(spacing: 8) {
+                        if let context = session.context {
+                            ContextGauge(usage: context)
+                        }
+                        TimelineView(.periodic(from: .now, by: 30)) { context in
+                            Text(elapsed(now: context.date))
+                                .font(.system(size: 11).monospacedDigit())
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .fixedSize()
+                    .transition(.opacity)
+                }
             }
             .padding(.trailing, showsActions ? actionsWidth + 6 : 0)
             .frame(height: PanelMetrics.sessionLine)
@@ -730,15 +753,11 @@ private struct SessionLine: View {
                 Spacer(minLength: 6)
                 HStack(spacing: 8) {
                     AgentGlyph(agentID: session.agent.id, size: 12)
-                    if let context = session.context {
-                        ContextGauge(usage: context)
-                    }
-                    TimelineView(.periodic(from: .now, by: 30)) { context in
-                        Text(elapsed(now: context.date))
-                            .font(.system(size: 11).monospacedDigit())
-                            .foregroundStyle(.tertiary)
+                    if let diff {
+                        DiffBadge(stats: diff, sharedWith: diffSharedWith)
                     }
                 }
+                .fixedSize()
                 .opacity(showsActions ? 0 : 1)
             }
             .padding(.leading, 26) // status 18 + 8
@@ -764,6 +783,7 @@ private struct SessionLine: View {
         .accessibilityAction { SessionJumper.jump(to: session) }
         .accessibilityAction(named: "Dismiss") { if dismissible { onDismiss() } }
         .accessibilityAction(named: "Show servers") { if !servers.isEmpty { onShowServers() } }
+        .accessibilityAction(named: Self.resetDiffLabel) { if canResetDiff { onResetDiff() } }
         .accessibilityActions {
             ForEach(projectActions) { action in
                 Button(label(for: action)) { onAction(action) }
@@ -777,7 +797,11 @@ private struct SessionLine: View {
     }
 
     private var dismissible: Bool { CompletedFilter.isCompleted(session) }
-    private var actionCount: Int { (servers.isEmpty ? 0 : 1) + (projectActions.isEmpty ? 0 : 1) + (dismissible ? 1 : 0) }
+    private var canResetDiff: Bool { diff?.baselineLeftHistory == true }
+    private static let resetDiffLabel = "Count changes from here"
+    private var actionCount: Int {
+        (servers.isEmpty ? 0 : 1) + (projectActions.isEmpty ? 0 : 1) + (dismissible ? 1 : 0) + (canResetDiff ? 1 : 0)
+    }
     private var anyActionRunning: Bool { projectActions.contains { actionRun($0)?.isRunning == true } }
 
     private func label(for action: QuickAction) -> String {
@@ -806,6 +830,13 @@ private struct SessionLine: View {
 
     private var actionButtons: some View {
         HStack(spacing: CircleButton<EmptyView>.spacing) {
+            if canResetDiff {
+                CircleButton(label: Self.resetDiffLabel,
+                             help: "The branch changed since this session started. Count its changes from the current commit.",
+                             action: onResetDiff) {
+                    Image(systemName: "arrow.counterclockwise").font(.system(size: 9, weight: .bold))
+                }
+            }
             if !servers.isEmpty {
                 CircleButton(label: "Show servers",
                              help: (["Show servers"] + servers.map(\.summary)).joined(separator: "\n"),
@@ -866,6 +897,7 @@ private struct SessionLine: View {
         if !servers.isEmpty {
             parts.append("Running " + servers.map(\.summary).joined(separator: ", "))
         }
+        if let diff { parts += DiffSummary.lines(diff, sharedWith: diffSharedWith) }
         parts.append(ProjectPath.abbreviate(session.cwd))
         if let app = target?.appName { parts.append("Click to open \(app)") }
         return parts.joined(separator: "\n")
@@ -877,22 +909,44 @@ private struct SessionLine: View {
     }
 }
 
+private struct DiffBadge: View {
+    let stats: DiffStats
+    let sharedWith: Int
+
+    var body: some View {
+        HStack(spacing: 3) {
+            if stats.baselineLeftHistory {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 8.5))
+                    .foregroundStyle(.orange)
+            }
+            if stats.files > 0 {
+                if stats.added + stats.removed == 0 {
+                    Text(stats.files == 1 ? "1 file" : "\(stats.files) files").foregroundStyle(.tertiary)
+                } else {
+                    Text("+\(DiffSummary.count(stats.added))").foregroundStyle(.green.opacity(0.85))
+                    Text("−\(DiffSummary.count(stats.removed))").foregroundStyle(.red.opacity(0.8))
+                }
+            }
+        }
+        .font(.system(size: 10, weight: .medium).monospacedDigit())
+        .help(DiffSummary.lines(stats, sharedWith: sharedWith).joined(separator: "\n"))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(DiffSummary.lines(stats, sharedWith: sharedWith).joined(separator: ". "))
+    }
+}
+
 private struct ContextGauge: View {
     let usage: AgentSession.ContextUsage
 
     var body: some View {
-        HStack(spacing: 3) {
-            ZStack {
-                Circle().stroke(Color.primary.opacity(0.12), lineWidth: 1.6)
-                Circle().trim(from: 0, to: min(usage.fraction, 1))
-                    .stroke(color, style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-            }
-            .frame(width: 9, height: 9)
-            Text("\(Int((usage.fraction * 100).rounded()))%")
-                .font(.system(size: 10, weight: .medium).monospacedDigit())
-                .foregroundStyle(usage.level == .normal ? Color.primary.opacity(0.38) : color)
+        ZStack {
+            Circle().stroke(Color.primary.opacity(0.12), lineWidth: 1.6)
+            Circle().trim(from: 0, to: min(usage.fraction, 1))
+                .stroke(color, style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+                .rotationEffect(.degrees(-90))
         }
+        .frame(width: 9, height: 9)
         .help(Self.summary(usage))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Context \(Int((usage.fraction * 100).rounded())) percent full")
@@ -907,7 +961,8 @@ private struct ContextGauge: View {
     }
 
     static func summary(_ usage: AgentSession.ContextUsage) -> String {
-        let text = "\(tokens(usage.usedTokens)) / \(tokens(usage.windowTokens)) tokens"
+        let percent = Int((usage.fraction * 100).rounded())
+        let text = "Context \(percent)% full · \(tokens(usage.usedTokens)) / \(tokens(usage.windowTokens)) tokens"
         return usage.level == .critical ? text + " · Auto-compact likely soon" : text
     }
 
