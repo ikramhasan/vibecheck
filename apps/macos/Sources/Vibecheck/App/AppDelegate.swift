@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var servers: DevServerStore?
     private var actions: ActionStore?
     private var controller: EdgePanelController?
+    private var updater: AppUpdater?
     private var soundPlanner = SoundPlanner()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -23,13 +24,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ? DevServerStore(agentPIDs: { [] }, scan: { _ in DemoData.servers }, terminate: { _, _ in })
             : DevServerStore(agentPIDs: { store.agentPIDs }, terminate: ServerTerminator.stop)
         let actions = args.contains("--demo") ? DemoData.actionStore() : ActionStore()
+        let updater = AppUpdater.bundled()
         let controller = EdgePanelController(store: store, usage: usage, servers: servers, actions: actions,
-                                             settings: settings)
+                                             settings: settings, updater: updater)
         self.store = store
         self.usage = usage
         self.servers = servers
         self.actions = actions
         self.controller = controller
+        self.updater = updater
 
         observeAgentPreferences(settings) { prefs in
             store.setHiddenAgents(prefs.hiddenStatus)

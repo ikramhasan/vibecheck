@@ -123,6 +123,12 @@ Pushing a `v*` tag runs `.github/workflows/release.yml`. It builds the app, publ
 the zip as a release of the tap and updates the cask's `version` and `sha256`. Never
 edit those two lines in the tap by hand.
 
+The same run signs the zip with the Sparkle key (`SPARKLE_PRIVATE_KEY` secret) and
+rewrites `appcast.xml` in the tap, which the app's updater reads. The release notes
+and the update dialog both list the commit subjects since the previous tag, without
+`docs:`, `chore:`, `ci:` and `test:` commits (`apps/macos/scripts/changelog.sh`). Write
+commit subjects with users in mind.
+
 Release only when asked to. Then:
 
 1. Make sure you're on `main`, the working tree is clean and `main` matches `origin/main`.

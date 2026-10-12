@@ -142,7 +142,7 @@ final class EdgePanelController {
     private var sizedForHeight: CGFloat = 0
 
     init(store: SessionStore, usage: UsageStore, servers: DevServerStore, actions: ActionStore,
-         settings: AppSettings) {
+         settings: AppSettings, updater: AppUpdater?) {
         self.store = store
         self.usage = usage
         self.servers = servers
@@ -150,7 +150,8 @@ final class EdgePanelController {
         self.settings = settings
         panel = EdgePanel(contentRect: .zero)
 
-        let root = EdgePanelView(store: store, usage: usage, servers: servers, actions: actions, state: state,
+        let root = EdgePanelView(store: store, usage: usage, servers: servers, actions: actions, updater: updater,
+                                 state: state,
                                  onSelectTab: { [weak self] in self?.showPage($0) },
                                  onOpenSettings: { [weak self] in self?.showPage(.settings) },
                                  onCloseSettings: { [weak self] in self?.showPage(.sessions) },
