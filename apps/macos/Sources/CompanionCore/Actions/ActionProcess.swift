@@ -31,8 +31,8 @@ public enum ActionProcess {
         posix_spawn_file_actions_adddup2(&files, STDOUT_FILENO, STDERR_FILENO)
         posix_spawn_file_actions_addchdir_np(&files, directory)
 
-        let arguments = [shell, "-c", command].map { strdup($0) } + [nil]
-        let variables = environment.map { strdup("\($0.key)=\($0.value)") } + [nil]
+        let arguments: [UnsafeMutablePointer<CChar>?] = [shell, "-c", command].map { strdup($0) } + [nil]
+        let variables: [UnsafeMutablePointer<CChar>?] = environment.map { strdup("\($0.key)=\($0.value)") } + [nil]
         defer { (arguments + variables).forEach { free($0) } }
 
         var pid: pid_t = 0
