@@ -15,7 +15,6 @@ public final class DiffStatsStore {
     @ObservationIgnored private let computer: DiffStatsComputing?
     @ObservationIgnored private let repository: (String) -> String?
     @ObservationIgnored private let remoteGit: (String) -> GitReading?
-    @ObservationIgnored private var resolvingRemote: [String: String] = [:]
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var trackers: [String: Tracker] = [:]
     @ObservationIgnored private var watchers: [String: CheckoutWatcher] = [:]
@@ -77,18 +76,24 @@ public final class DiffStatsStore {
             stats[id] = nil
             revisions[id] = nil
         }
-        for id in resolvingRemote.keys where current[id]?.cwd != resolvingRemote[id] { resolvingRemote[id] = nil }
         for (id, session) in current {
             let working = session.status == .working || session.status == .needsAttention
-            if var tracker = trackers[id], tracker.cwd == session.cwd {
+            if var tracker = trackers[id], tracker.cwd == session.cwd, tracker.host == session.host {
                 let moved = tracker.updatedAt != session.updatedAt
                 tracker.updatedAt = session.updatedAt
                 tracker.working = working
                 trackers[id] = tracker
                 if moved { requestRefresh(id) }
-            } else if session.host != nil {
-                trackers[id] = nil
-                resolveRemote(session)
+            } else if let host = session.host {
+                guard let checkout = session.remoteCheckout, let git = remoteGit(host) else {
+                    trackers[id] = nil
+                    stats[id] = nil
+                    continue
+                }
+                trackers[id] = Tracker(cwd: session.cwd, host: host, checkout: checkout, computer: GitDiffStats(git: git),
+                                       updatedAt: session.updatedAt, working: working)
+                stats[id] = nil
+                resolveBaseline(id, at: session.startedAt)
             } else if let computer, let checkout = repository(session.cwd) {
                 trackers[id] = Tracker(cwd: session.cwd, checkout: checkout, computer: computer,
                                        updatedAt: session.updatedAt, working: working)
@@ -113,22 +118,6 @@ public final class DiffStatsStore {
             resets[id] = ["baseline": head, "at": now]
             defaults.set(resets, forKey: Self.resetsKey)
             setBaseline(head, since: now, for: id)
-        }
-    }
-
-    private func resolveRemote(_ session: AgentSession) {
-        guard let host = session.host, resolvingRemote[session.id] == nil, let git = remoteGit(host) else { return }
-        let id = session.id, cwd = session.cwd
-        resolvingRemote[id] = cwd
-        Task {
-            guard let output = await git.run(.toplevel, in: cwd), output.status == 0 else { return }
-            let checkout = String(decoding: output.stdout, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !checkout.isEmpty, resolvingRemote[id] == cwd, trackers[id] == nil else { return }
-            let working = session.status == .working || session.status == .needsAttention
-            trackers[id] = Tracker(cwd: cwd, host: host, checkout: checkout, computer: GitDiffStats(git: git),
-                                   updatedAt: session.updatedAt, working: working)
-            stats[id] = nil
-            resolveBaseline(id, at: session.startedAt)
         }
     }
 

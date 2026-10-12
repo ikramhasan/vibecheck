@@ -217,8 +217,10 @@ public struct SessionGroup: Identifiable, Hashable, Sendable {
         var order: [String] = []
         var groups: [String: SessionGroup] = [:]
         for s in sessions {
-            let p = s.host.map { ProjectInfo(root: "\($0):\(s.cwd)", name: URL(fileURLWithPath: s.cwd).lastPathComponent, host: $0) }
-                ?? project(s.cwd)
+            let p = s.host.map { host in
+                let root = s.remoteCheckout ?? s.cwd
+                return ProjectInfo(root: "\(host):\(root)", name: URL(fileURLWithPath: root).lastPathComponent, host: host)
+            } ?? project(s.cwd)
             if groups[p.root] == nil { order.append(p.root); groups[p.root] = SessionGroup(project: p, sessions: []) }
             groups[p.root]!.sessions.append(s)
         }

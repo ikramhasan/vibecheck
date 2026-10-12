@@ -58,8 +58,10 @@ public struct GitOutput: Equatable, Sendable {
 /// Where git runs: this Mac, or another machine over its ssh connection.
 public protocol GitReading: Sendable {
     func run(_ query: GitQuery, in checkout: String) async -> GitOutput?
-    /// An untracked file's contents, or `nil` if it's missing or over `GitDiffStats.largestCountedFile`.
+    /// An untracked file's contents, or `nil` if it's missing, a symlink, or over `GitDiffStats.largestCountedFile`.
     func contents(of path: String, in checkout: String) async -> Data?
+    /// An untracked file's line count, or `nil` where `contents` is `nil` or the file is binary.
+    func lineCount(of path: String, in checkout: String) async -> Int?
 }
 
 public struct LocalGit: GitReading {
@@ -81,9 +83,14 @@ public struct LocalGit: GitReading {
 
     public func contents(of path: String, in checkout: String) async -> Data? {
         let url = URL(fileURLWithPath: checkout).appending(path: path)
-        guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+        guard let values = try? url.resourceValues(forKeys: [.fileSizeKey, .isSymbolicLinkKey]),
+              values.isSymbolicLink == false, let size = values.fileSize,
               size <= GitDiffStats.largestCountedFile else { return nil }
         return try? Data(contentsOf: url, options: .alwaysMapped)
+    }
+
+    public func lineCount(of path: String, in checkout: String) async -> Int? {
+        await contents(of: path, in: checkout).flatMap(DiffStats.lineCount(of:))
     }
 }
 
@@ -115,10 +122,14 @@ public struct GitDiffStats: DiffStatsComputing {
               let untracked = await git.run(.untracked, in: checkout), untracked.status == 0,
               let ancestry = await git.run(.isAncestor(baseline), in: checkout) else { return nil }
         var stats = DiffStats.numstat(tracked.stdout)
-        for path in untracked.stdout.split(separator: 0) where path.last != UInt8(ascii: "/") {
-            let contents = await git.contents(of: String(decoding: path, as: UTF8.self), in: checkout)
-            stats.add(lines: contents.flatMap(DiffStats.lineCount(of:)).map { ($0, 0) })
+        let git = git
+        let counts = await withTaskGroup(of: Int?.self) { group in
+            for path in Self.untrackedFiles(untracked.stdout) {
+                group.addTask { await git.lineCount(of: path, in: checkout) }
+            }
+            return await group.reduce(into: []) { $0.append($1) }
         }
+        for count in counts { stats.add(lines: count.map { ($0, 0) }) }
         stats.baselineLeftHistory = ancestry.status == 1
         return stats
     }
@@ -126,17 +137,26 @@ public struct GitDiffStats: DiffStatsComputing {
     public func patches(in checkout: String, since baseline: String) async -> [FilePatch]? {
         guard let tracked = await git.run(.patch(since: baseline), in: checkout), tracked.status == 0,
               let untracked = await git.run(.untracked, in: checkout), untracked.status == 0 else { return nil }
-        var patches = Self.split(String(decoding: tracked.stdout, as: UTF8.self)).map { FilePatch(patch: $0) }
-        for path in untracked.stdout.split(separator: 0) where path.last != UInt8(ascii: "/") {
-            let path = String(decoding: path, as: UTF8.self)
-            let contents = await git.contents(of: path, in: checkout)
-            patches.append(FilePatch(patch: Self.newFilePatch(path: path, contents: contents), untracked: true))
+        let patches = Self.split(String(decoding: tracked.stdout, as: UTF8.self)).map { FilePatch(patch: $0) }
+        let git = git
+        let added = await withTaskGroup(of: (Int, FilePatch).self) { group in
+            for (index, path) in Self.untrackedFiles(untracked.stdout).enumerated() {
+                group.addTask {
+                    let contents = await git.contents(of: path, in: checkout)
+                    return (index, FilePatch(patch: Self.newFilePatch(path: path, contents: contents), untracked: true))
+                }
+            }
+            return await group.reduce(into: []) { $0.append($1) }
         }
-        return patches
+        return patches + added.sorted { $0.0 < $1.0 }.map(\.1)
     }
 
     public func branch(in checkout: String) async -> String? {
         await commit(in: checkout, .branch)
+    }
+
+    private static func untrackedFiles(_ output: Data) -> [String] {
+        output.split(separator: 0).filter { $0.last != UInt8(ascii: "/") }.map { String(decoding: $0, as: UTF8.self) }
     }
 
     static func split(_ diff: String) -> [String] {

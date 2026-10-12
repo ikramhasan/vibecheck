@@ -123,6 +123,8 @@ public struct AgentSession: Identifiable, Hashable, Sendable {
     public var pid: Int32?
     /// For a remote session, the ssh process on this Mac that carries it. Jumping goes through it.
     public var sshPID: Int32?
+    /// For a remote session, the git checkout containing `cwd` on that machine, once known.
+    public var remoteCheckout: String?
     public var origin: Origin?
     public var status: Status
     public var task: String?

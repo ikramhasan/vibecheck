@@ -194,8 +194,9 @@ private struct ServerRow: View {
         if let path = server.appPath ?? server.cwd {
             lines.append(server.remote == nil ? ProjectPath.abbreviate(path) : "\(host):\(path)")
         }
-        if server.remote != nil && server.url == nil {
-            lines.append("Only reachable on \(host) itself: it listens on localhost there")
+        if let remote = server.remote, server.url == nil {
+            lines.append(remote.loopbackOnly ? "Only reachable on \(host) itself: it listens on localhost there"
+                : "This Mac's address for \(host) is unknown")
         }
         if let session { lines.append("Started by \(session.agent.name): \(StatusPresentation.headline(session))") }
         if server.hostsAgent { lines.append("Runs an agent session, so it can't be quit from here") }

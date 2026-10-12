@@ -101,7 +101,8 @@ other machine:
   environments; nothing else leaves the machine except transcripts and diffs.
 - Clicking a remote session opens the app on this Mac that runs it: the app whose
   `ssh -L` tunnel reaches the agent's server (T3 Code), or the terminal tab (and tmux
-  pane) of the `ssh` session the agent was started from.
+  pane) of the `ssh` session the agent was started from. This needs a direct ssh
+  connection; through `ProxyJump` or `ProxyCommand` there's nothing on this Mac to match.
 - Dev servers on the machine show in the Servers tab as `host:port` and open at the
   machine's address. Servers that only listen on its localhost are listed without a link.
   Remote servers can't be stopped from vibecheck.

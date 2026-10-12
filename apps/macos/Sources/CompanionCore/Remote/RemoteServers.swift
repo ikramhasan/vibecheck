@@ -42,8 +42,7 @@ struct RemoteServerFacts: Equatable {
         }
     }
 
-    /// - Parameter address: where this Mac reaches the machine; servers bound only to the
-    ///   machine's loopback interface get no URL.
+    /// - Parameter address: where this Mac reaches the machine, if known.
     func servers(host: String, address: String?, agentPIDs: Set<Int32>) -> [DevServer] {
         let processes = processes
         let loopbackOnly = Set(processes.values.flatMap(\.loopbackPorts)).subtracting(
@@ -55,7 +54,8 @@ struct RemoteServerFacts: Equatable {
         ).map { server in
             var server = server
             server.id = "\(host):\(server.id)"
-            server.remote = DevServer.Remote(host: host, address: server.ports.allSatisfy(loopbackOnly.contains) ? nil : address)
+            server.remote = DevServer.Remote(host: host, address: address,
+                                             loopbackOnly: server.ports.allSatisfy(loopbackOnly.contains))
             return server
         }
     }

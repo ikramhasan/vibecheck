@@ -1,7 +1,8 @@
 enum RemoteScript {
     static let transcriptWindow = TranscriptFile.initialWindow
     static let headLimit = 512 * 1024
-    static let serverScanTicks = 5
+    static let serverScanSeconds = 5
+    static let binarySniffBytes = 8000
 
     static let source = #"""
     export LC_ALL=C
@@ -14,7 +15,7 @@ enum RemoteScript {
     sha='^[0-9a-f]{40,64}$'
     us=$'\x1f'
     gs=$'\x1d'
-    tick=0
+    nextservers=0
     serverfacts=""
     ticks=$(getconf CLK_TCK)
     while read -r name value _; do [[ $name == btime ]] && boot=$value; done < /proc/stat
@@ -127,12 +128,18 @@ enum RemoteScript {
           set -- "${git[@]}" merge-base --is-ancestor "$arg" HEAD ;;
         patch) [[ $arg =~ $sha ]] || { reply "$id" 255 ""; return; }
           set -- "${git[@]}" diff -M --no-color --no-ext-diff --no-textconv --src-prefix=a/ --dst-prefix=b/ "$arg" -- ;;
-        file) if [[ -n $arg && $arg != /* && /$arg/ != */../* && -f $dir/$arg ]] \
-              && (( $(stat -c %s -- "$dir/$arg") <= \#(GitDiffStats.largestCountedFile) )); then
-            set -- cat -- "$dir/$arg"
+        file|lines)
+          local path=$dir/$arg size chunk
+          if [[ -z $arg || $arg == /* || /$arg/ == */../* || ! -f $path || -L $path ]]; then reply "$id" 1 ""; return; fi
+          size=$(stat -c %s -- "$path") || { reply "$id" 1 ""; return; }
+          (( size <= \#(GitDiffStats.largestCountedFile) )) || { reply "$id" 1 ""; return; }
+          if [[ $op == file ]]; then
+            set -- cat -- "$path"
           else
-            reply "$id" 1 ""
-            return
+            IFS= read -r -d '' -n \#(binarySniffBytes) chunk 2>/dev/null < "$path"
+            (( ${#chunk} < (size < \#(binarySniffBytes) ? size : \#(binarySniffBytes)) )) && { reply "$id" 1 ""; return; }
+            (( size == 0 )) && { reply "$id" 0 "$(printf 0 | base64 -w0)"; return; }
+            set -- grep -c '' -- "$path"
           fi ;;
         *) reply "$id" 255 ""; return ;;
       esac
@@ -140,20 +147,28 @@ enum RemoteScript {
       reply "$id" "$?" "$output"
     }
 
+    handle() {
+      local key=${request[1]-}
+      case ${request[0]-} in
+        F) if [[ $key =~ ^[A-Za-z0-9._-]+$ ]] && allowed "${request[2]-}"; then
+            follow[$key]=${request[2]}
+            unset 'offset[$key]'
+          fi ;;
+        U) unset 'follow[$key]' 'offset[$key]' ;;
+        Q) query "$key" "${request[2]-}" "${request[3]-}" "${request[4]-}" ;;
+      esac
+    }
+
     frame "V 2" "$HOME"
     while :; do
       IFS=$'\t' read -r -t 1 -a request
       status=$?
       if (( status == 0 )); then
-        key=${request[1]-}
-        case ${request[0]-} in
-          F) if [[ $key =~ ^[A-Za-z0-9._-]+$ ]] && allowed "${request[2]-}"; then
-              follow[$key]=${request[2]}
-              unset 'offset[$key]'
-            fi ;;
-          U) unset 'follow[$key]' 'offset[$key]' ;;
-          Q) query "$key" "${request[2]-}" "${request[3]-}" "${request[4]-}" ;;
-        esac
+        handle
+        while read -t 0; do
+          IFS=$'\t' read -r -t 1 -a request || break
+          handle
+        done
       elif (( status <= 128 )); then
         exit 0
       fi
@@ -228,7 +243,10 @@ enum RemoteScript {
         frame "L" "$listing"
       fi
 
-      (( tick++ % \#(serverScanTicks) == 0 )) && servers
+      if (( SECONDS >= nextservers )); then
+        servers
+        nextservers=$(( SECONDS + \#(serverScanSeconds) ))
+      fi
 
       for key in "${!follow[@]}"; do
         file=${follow[$key]}

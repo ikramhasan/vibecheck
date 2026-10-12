@@ -19,6 +19,11 @@ public struct RemoteGit: GitReading {
         return await source.query(op, in: checkout, argument: argument)
     }
 
+    public func lineCount(of path: String, in checkout: String) async -> Int? {
+        guard let output = await source.query("lines", in: checkout, argument: path), output.status == 0 else { return nil }
+        return Int(String(decoding: output.stdout, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
     public func contents(of path: String, in checkout: String) async -> Data? {
         guard let output = await source.query("file", in: checkout, argument: path), output.status == 0 else { return nil }
         return output.stdout

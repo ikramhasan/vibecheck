@@ -44,15 +44,17 @@ public struct DevServer: Identifiable, Equatable, Sendable {
     public var hostsAgent: Bool
     public var remote: Remote?
 
-    /// A server on another machine: its ssh host, and the address this Mac reaches it at
-    /// (`nil` when it only listens on that machine's loopback interface).
+    /// A server on another machine: its ssh host, and the address this Mac reaches the
+    /// machine at (`nil` when unknown, or when the server only listens on its loopback).
     public struct Remote: Equatable, Sendable {
         public var host: String
         public var address: String?
+        public var loopbackOnly: Bool
 
-        public init(host: String, address: String?) {
+        public init(host: String, address: String?, loopbackOnly: Bool = false) {
             self.host = host
             self.address = address
+            self.loopbackOnly = loopbackOnly
         }
     }
 
@@ -80,7 +82,8 @@ public struct DevServer: Identifiable, Equatable, Sendable {
     public var url: URL? {
         guard let port else { return nil }
         guard let remote else { return URL(string: "http://localhost:\(port)") }
-        return remote.address.flatMap { URL(string: "http://\($0.contains(":") ? "[\($0)]" : $0):\(port)") }
+        guard !remote.loopbackOnly, let address = remote.address else { return nil }
+        return URL(string: "http://\(address.contains(":") ? "[\(address)]" : address):\(port)")
     }
     public var summary: String { address.map { "\(name) on \($0)" } ?? name }
     public var canStop: Bool { framework != .docker && !hostsAgent && remote == nil }

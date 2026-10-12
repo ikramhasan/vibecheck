@@ -255,3 +255,17 @@ private actor FakeDiffs: DiffStatsComputing {
         #expect(comparison.summary(since: nil) == "detached HEAD · since b08b00c → working tree · branch changed since then")
     }
 }
+
+@Suite struct LocalGitTests {
+    @Test func untrackedSymlinksAreNotRead() async throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "vibecheck-link-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let secret = directory.appending(path: "secret.txt")
+        try Data("key\n".utf8).write(to: secret)
+        try FileManager.default.createSymbolicLink(at: directory.appending(path: "link.txt"), withDestinationURL: secret)
+        let git = LocalGit(executable: URL(fileURLWithPath: "/usr/bin/git"))
+        #expect(await git.contents(of: "link.txt", in: directory.path) == nil)
+        #expect(await git.lineCount(of: "link.txt", in: directory.path) == nil)
+        #expect(await git.lineCount(of: "secret.txt", in: directory.path) == 1)
+    }
+}

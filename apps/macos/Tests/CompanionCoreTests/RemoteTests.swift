@@ -276,6 +276,8 @@ private actor FakeRemoteGit: GitReading {
     }
 
     func contents(of path: String, in checkout: String) async -> Data? { Data("one\ntwo\n".utf8) }
+
+    func lineCount(of path: String, in checkout: String) async -> Int? { 2 }
 }
 
 @MainActor
@@ -291,9 +293,14 @@ private actor FakeRemoteGit: GitReading {
         session.host = "omaku"
         store.update([session])
         try await Task.sleep(for: .milliseconds(200))
+        #expect(store.stats(for: session) == nil)
+
+        session.remoteCheckout = "/home/me/repo"
+        store.update([session])
+        try await Task.sleep(for: .milliseconds(200))
 
         #expect(store.stats(for: session) == DiffStats(files: 2, added: 5, removed: 1))
-        #expect(await git.checkouts == ["/home/me/repo/app", "/home/me/repo"])
+        #expect(await git.checkouts == ["/home/me/repo"])
         #expect(await git.queries.contains(.reflog(at: 1000)))
         #expect(localLookups.isEmpty)
     }
@@ -333,6 +340,13 @@ private actor FakeRemoteGit: GitReading {
         let gateway = try #require(facts.servers(host: "omaku", address: "100.67.36.26", agentPIDs: [])
             .first { $0.ports == [18789] })
         #expect(gateway.url == nil)
+        #expect(gateway.remote?.loopbackOnly == true)
+    }
+
+    @Test func unknownAddressIsNotLoopbackOnly() throws {
+        let next = try #require(facts.servers(host: "omaku", address: nil, agentPIDs: []).first { $0.ports == [3000] })
+        #expect(next.url == nil)
+        #expect(next.remote?.loopbackOnly == false)
     }
 
     @Test func serversBelongToSessionsOnTheirOwnMachine() throws {
@@ -348,5 +362,26 @@ private actor FakeRemoteGit: GitReading {
         var server = DevServer(id: "x", framework: .node, pid: 1, startedAt: .now, ports: [3000])
         server.remote = DevServer.Remote(host: "omaku", address: "fd7a:115c::1")
         #expect(server.url == URL(string: "http://[fd7a:115c::1]:3000"))
+    }
+}
+
+@Suite struct RemoteGroupingTests {
+    @Test func remoteSessionsGroupByTheirCheckout() {
+        func session(_ id: String, cwd: String) -> AgentSession {
+            var session = AgentSession(agent: AgentIdentity.claude, sessionID: id, cwd: cwd, status: .working)
+            session.host = "omaku"
+            session.remoteCheckout = "/home/me/Shop"
+            return session
+        }
+        let groups = SessionGroup.make([session("a", cwd: "/home/me/Shop/app"), session("b", cwd: "/home/me/Shop/api")]) {
+            ProjectInfo(root: $0, name: $0)
+        }
+        #expect(groups.map(\.project) == [ProjectInfo(root: "omaku:/home/me/Shop", name: "Shop", host: "omaku")])
+        #expect(groups.first?.sessions.count == 2)
+    }
+
+    @Test func readsTheConfiguredHostname() {
+        let config = "user iku\nhostname omaku.example.ts.net\nport 22\nproxyjump bastion\n"
+        #expect(RemoteSessionSource.configuredHostname(fromConfig: config) == "omaku.example.ts.net")
     }
 }

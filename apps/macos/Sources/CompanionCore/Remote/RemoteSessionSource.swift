@@ -49,6 +49,9 @@ public final class RemoteSessionSource: SessionSource {
     @ObservationIgnored private var nextQuery = 0
     @ObservationIgnored private var queries: [Int: CheckedContinuation<GitOutput?, Never>] = [:]
     @ObservationIgnored private var hostAddress: String?
+    @ObservationIgnored private var configuredHostname: String?
+    @ObservationIgnored private var checkouts: [String: String] = [:]
+    @ObservationIgnored private var resolvingCheckouts: Set<String> = []
     @ObservationIgnored private var unsupported = false
 
     public init(host: RemoteHost) {
@@ -111,14 +114,33 @@ public final class RemoteSessionSource: SessionSource {
     }
 
     private func connect() {
+        let host = host
         Task.detached(priority: .utility) { [weak self] in
             let environment = Self.environment
-            await self?.launch(environment: environment)
+            let hostname = await Self.configuredHostname(of: host, environment: environment)
+            await self?.launch(environment: environment, hostname: hostname)
         }
     }
 
-    private func launch(environment: [String: String]) {
+    /// The `HostName` ssh resolves the alias to, for reaching the machine when ssh's own
+    /// socket doesn't show it (a `ProxyJump` or `ProxyCommand` in between).
+    nonisolated static func configuredHostname(of host: RemoteHost, environment: [String: String]) async -> String? {
+        guard let output = try? await ProcessRunner.run(URL(fileURLWithPath: "/usr/bin/ssh"), ["-G", "--", host.alias],
+                                                         environment: environment, timeout: 5),
+              output.status == 0 else { return nil }
+        return configuredHostname(fromConfig: String(decoding: output.stdout, as: UTF8.self))
+    }
+
+    nonisolated static func configuredHostname(fromConfig config: String) -> String? {
+        config.split(separator: "\n").lazy.compactMap { line -> String? in
+            let parts = line.split(separator: " ", maxSplits: 1)
+            return parts.count == 2 && parts[0] == "hostname" ? String(parts[1]) : nil
+        }.first
+    }
+
+    private func launch(environment: [String: String], hostname: String?) {
         guard running, process == nil else { return }
+        configuredHostname = hostname
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
         process.arguments = Self.arguments(for: host)
@@ -180,7 +202,7 @@ public final class RemoteSessionSource: SessionSource {
             }
             sessions.apply(frames).forEach(send)
             if frames.contains(where: { if case .serverFacts = $0 { true } else { false } }) {
-                servers = sessions.servers(address: hostAddress)
+                servers = sessions.servers(address: hostAddress ?? configuredHostname)
             }
             settle?.changed()
         } catch {
@@ -222,10 +244,29 @@ public final class RemoteSessionSource: SessionSource {
     }
 
     private func publish() {
-        let next = sessions.sessions(sshPID: localSSH())
+        var next = sessions.sessions(sshPID: localSSH())
+        for index in next.indices {
+            guard let checkout = checkouts[next[index].cwd] else {
+                resolveCheckout(of: next[index].cwd)
+                continue
+            }
+            next[index].remoteCheckout = checkout.isEmpty ? nil : checkout
+        }
         guard next != last else { return }
         last = next
         onChange?(next)
+    }
+
+    private func resolveCheckout(of cwd: String) {
+        guard resolvingCheckouts.insert(cwd).inserted else { return }
+        Task {
+            let output = await query("toplevel", in: cwd)
+            resolvingCheckouts.remove(cwd)
+            guard let output else { return }
+            checkouts[cwd] = output.status == 0
+                ? String(decoding: output.stdout, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines) : ""
+            publish()
+        }
     }
 
     private func localSSH() -> (RemoteLink) -> Int32? {
