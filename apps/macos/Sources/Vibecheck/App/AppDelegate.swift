@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var servers: DevServerStore?
     private var actions: ActionStore?
     private var diffs: DiffStatsStore?
+    private var diffWindow: DiffWindowController?
     private var controller: EdgePanelController?
     private var updater: AppUpdater?
     private var soundPlanner = SoundPlanner()
@@ -30,13 +31,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             : DiffStatsStore(computer: GitDiffStats.locate(),
                              repository: { ProjectIcons.shared.resolver.repository(for: $0) })
         let updater = AppUpdater.bundled()
+        let diffWindow = DiffWindowController(diffs: diffs)
         let controller = EdgePanelController(store: store, usage: usage, servers: servers, actions: actions, diffs: diffs,
+                                             onShowDiff: { diffWindow?.show($0, project: ProjectIcons.shared.project(for: $0.cwd)) },
                                              settings: settings, updater: updater)
         self.store = store
         self.usage = usage
         self.servers = servers
         self.actions = actions
         self.diffs = diffs
+        self.diffWindow = diffWindow
         self.controller = controller
         self.updater = updater
 
@@ -231,5 +235,49 @@ struct DemoDiffStats: DiffStatsComputing {
         case "AgentCompanion": DiffStats(files: 2, added: 12, removed: 30, baselineLeftHistory: true)
         default: DiffStats(files: 7, added: 1240, removed: 312, binaryFiles: 1)
         }
+    }
+
+    func patches(in checkout: String, since baseline: String) async -> [FilePatch]? {
+        [
+            FilePatch(patch: """
+            diff --git a/src/middleware.ts b/src/middleware.ts
+            index 3b18e51..a9c2f04 100644
+            --- a/src/middleware.ts
+            +++ b/src/middleware.ts
+            @@ -1,12 +1,12 @@
+            -import { createHmac } from 'node:crypto';
+             import { NextResponse, type NextRequest } from 'next/server';
+            +import { verifySession } from './lib/session';
+            +
+            +export const config = { runtime: 'edge', matcher: ['/app/:path*'] };
+             
+             export async function middleware(request: NextRequest) {
+               const token = request.cookies.get('session')?.value;
+            -  if (!token || !verify(token)) {
+            +  if (!token || !(await verifySession(token))) {
+                 return NextResponse.redirect(new URL('/login', request.url));
+               }
+               return NextResponse.next();
+             }
+            -
+            -const verify = (token: string) => createHmac('sha256', process.env.SECRET!).update(token).digest('hex') === token;
+            """),
+            FilePatch(patch: """
+            diff --git a/src/lib/session.ts b/src/lib/session.ts
+            new file mode 100644
+            --- /dev/null
+            +++ b/src/lib/session.ts
+            @@ -0,0 +1,9 @@
+            +const encoder = new TextEncoder();
+            +
+            +export async function verifySession(token: string): Promise<boolean> {
+            +  const [payload, signature] = token.split('.');
+            +  if (!payload || !signature) return false;
+            +  const key = await crypto.subtle.importKey('raw', encoder.encode(process.env.SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']);
+            +  const bytes = Uint8Array.from(atob(signature), (c) => c.charCodeAt(0));
+            +  return crypto.subtle.verify('HMAC', key, bytes, encoder.encode(payload));
+            +}
+            """, untracked: true),
+        ]
     }
 }

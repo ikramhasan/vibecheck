@@ -31,6 +31,25 @@ import Testing
         #expect(DiffSummary.count(1240) == "1.2k")
     }
 
+    @Test func splitsAGitDiffIntoOnePatchPerFile() {
+        let diff = "diff --git a/a.txt b/a.txt\n@@ -1 +1 @@\n-a\n+b\ndiff --git a/c.txt b/c.txt\n@@ -1 +1 @@\n-c\n+d\n"
+        #expect(GitDiffStats.split(diff) == [
+            "diff --git a/a.txt b/a.txt\n@@ -1 +1 @@\n-a\n+b\n",
+            "diff --git a/c.txt b/c.txt\n@@ -1 +1 @@\n-c\n+d\n",
+        ])
+        #expect(GitDiffStats.split("").isEmpty)
+    }
+
+    @Test func buildsAPatchForANewFile() {
+        let header = "diff --git a/n.txt b/n.txt\nnew file mode 100644\n"
+        #expect(GitDiffStats.newFilePatch(path: "n.txt", contents: Data("a\nb\n".utf8))
+            == header + "--- /dev/null\n+++ b/n.txt\n@@ -0,0 +1,2 @@\n+a\n+b\n")
+        #expect(GitDiffStats.newFilePatch(path: "n.txt", contents: Data("a".utf8))
+            == header + "--- /dev/null\n+++ b/n.txt\n@@ -0,0 +1,1 @@\n+a\n\\ No newline at end of file\n")
+        #expect(GitDiffStats.newFilePatch(path: "n.txt", contents: Data([0, 1]))
+            == header + "Binary files /dev/null and b/n.txt differ\n")
+    }
+
     @Test func ignoresChangesInsideTheGitDirectory() {
         #expect(CheckoutWatcher.isInsideGitDirectory("/repo/.git/index"))
         #expect(CheckoutWatcher.isInsideGitDirectory("/repo/.git"))
@@ -103,6 +122,20 @@ import Testing
         #expect(await git.baseline(in: repo, at: nil) == (try run(repo, "rev-parse", "HEAD")))
     }
 
+    @Test func patchesCoverTrackedAndNewFiles() async throws {
+        let git = try #require(git)
+        let repo = try repo()
+        let baseline = try #require(await git.baseline(in: repo, at: nil))
+        try write(repo, "a.txt", "one\n2\nthree\n")
+        try write(repo, "new.txt", "hello\n")
+
+        let patches = try #require(await git.patches(in: repo, since: baseline))
+        #expect(patches.count == 2)
+        #expect(patches[0].patch.hasPrefix("diff --git a/a.txt b/a.txt\n") && patches[0].patch.contains("\n-two\n+2\n"))
+        #expect(patches[1] == FilePatch(patch: GitDiffStats.newFilePatch(path: "new.txt", contents: Data("hello\n".utf8)),
+                                        untracked: true))
+    }
+
     @Test func flagsABaselineThatLeftHistory() async throws {
         let git = try #require(git)
         let repo = try repo()
@@ -132,6 +165,8 @@ private actor FakeDiffs: DiffStatsComputing {
         statsCalls += 1
         return DiffStats(files: 1, added: statsCalls, removed: 0, baselineLeftHistory: baseline == "start")
     }
+
+    func patches(in checkout: String, since baseline: String) async -> [FilePatch]? { [] }
 }
 
 @MainActor

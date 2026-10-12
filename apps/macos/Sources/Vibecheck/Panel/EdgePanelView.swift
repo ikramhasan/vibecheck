@@ -41,6 +41,7 @@ struct EdgePanelView: View {
     let onClearCompleted: () -> Void
     let onDismiss: (AgentSession) -> Void
     let onShowServers: (AgentSession) -> Void
+    let onShowDiff: (AgentSession) -> Void
     let onEditAction: (QuickAction?) -> Void
     let onSaveAction: (QuickAction) -> Void
     let onShowActionLog: (ActionRunKey) -> Void
@@ -88,7 +89,7 @@ struct EdgePanelView: View {
                                 paced: state.pageChanging,
                                 onSelectTab: onSelectTab, onOpenSettings: onOpenSettings,
                                 onClearCompleted: onClearCompleted, onDismiss: onDismiss,
-                                onShowServers: onShowServers,
+                                onShowServers: onShowServers, onShowDiff: onShowDiff,
                                 onStopServer: servers.stopServer, onEditAction: onEditAction,
                                 onShowActionLog: onShowActionLog, onQuit: onQuit)
                     .frame(height: tabHeight(groups), alignment: .top)
@@ -343,6 +344,7 @@ private struct ExpandedContent: View {
     let onClearCompleted: () -> Void
     let onDismiss: (AgentSession) -> Void
     let onShowServers: (AgentSession) -> Void
+    let onShowDiff: (AgentSession) -> Void
     let onStopServer: (DevServer) -> Void
     let onEditAction: (QuickAction?) -> Void
     let onShowActionLog: (ActionRunKey) -> Void
@@ -490,7 +492,7 @@ private struct ExpandedContent: View {
                         .cascade(shown: sessionsShown, index: index, side: sessionsSide, paced: paced)
                 }
                 ProjectGroupView(group: group, pendingIDs: pendingIDs, servers: servers, actions: actions, diffs: diffs,
-                                 onDismiss: onDismiss, onShowServers: onShowServers,
+                                 onDismiss: onDismiss, onShowServers: onShowServers, onShowDiff: onShowDiff,
                                  onShowActionLog: onShowActionLog)
                     .frame(height: PanelMetrics.groupHeight(group), alignment: .top)
                     // Small stagger so groups settle in after the card lands, and leave
@@ -636,6 +638,7 @@ private struct ProjectGroupView: View {
     let diffs: DiffStatsStore
     let onDismiss: (AgentSession) -> Void
     let onShowServers: (AgentSession) -> Void
+    let onShowDiff: (AgentSession) -> Void
     let onShowActionLog: (ActionRunKey) -> Void
 
     private var projectActions: [QuickAction] {
@@ -672,6 +675,7 @@ private struct ProjectGroupView: View {
                             diffSharedWith: diffs.sessionsSharingCheckout(with: session),
                             actionRun: { actions.run(for: $0, in: directory(of: $0, for: session)) },
                             onDismiss: { onDismiss(session) }, onShowServers: { onShowServers(session) },
+                            onShowDiff: { onShowDiff(session) },
                             onAction: { trigger($0, for: session) },
                             onResetDiff: { diffs.resetBaseline(of: session) })
             }
@@ -707,6 +711,7 @@ private struct SessionLine: View {
     let actionRun: (QuickAction) -> ActionRun?
     let onDismiss: () -> Void
     let onShowServers: () -> Void
+    let onShowDiff: () -> Void
     let onAction: (QuickAction) -> Void
     let onResetDiff: () -> Void
     @State private var hovering = false
@@ -783,6 +788,7 @@ private struct SessionLine: View {
         .accessibilityAction { SessionJumper.jump(to: session) }
         .accessibilityAction(named: "Dismiss") { if dismissible { onDismiss() } }
         .accessibilityAction(named: "Show servers") { if !servers.isEmpty { onShowServers() } }
+        .accessibilityAction(named: "Show changes") { if canShowDiff { onShowDiff() } }
         .accessibilityAction(named: Self.resetDiffLabel) { if canResetDiff { onResetDiff() } }
         .accessibilityActions {
             ForEach(projectActions) { action in
@@ -798,9 +804,11 @@ private struct SessionLine: View {
 
     private var dismissible: Bool { CompletedFilter.isCompleted(session) }
     private var canResetDiff: Bool { diff?.baselineLeftHistory == true }
+    private var canShowDiff: Bool { (diff?.files ?? 0) > 0 }
     private static let resetDiffLabel = "Count changes from here"
     private var actionCount: Int {
         (servers.isEmpty ? 0 : 1) + (projectActions.isEmpty ? 0 : 1) + (dismissible ? 1 : 0) + (canResetDiff ? 1 : 0)
+            + (canShowDiff ? 1 : 0)
     }
     private var anyActionRunning: Bool { projectActions.contains { actionRun($0)?.isRunning == true } }
 
@@ -830,6 +838,11 @@ private struct SessionLine: View {
 
     private var actionButtons: some View {
         HStack(spacing: CircleButton<EmptyView>.spacing) {
+            if canShowDiff {
+                CircleButton(label: "Show changes", help: "Show changes", action: onShowDiff) {
+                    Image(systemName: "plus.forwardslash.minus").font(.system(size: 9, weight: .bold))
+                }
+            }
             if canResetDiff {
                 CircleButton(label: Self.resetDiffLabel,
                              help: "The branch changed since this session started. Count its changes from the current commit.",

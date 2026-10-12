@@ -142,6 +142,7 @@ final class EdgePanelController {
     private var sizedForHeight: CGFloat = 0
 
     init(store: SessionStore, usage: UsageStore, servers: DevServerStore, actions: ActionStore, diffs: DiffStatsStore,
+         onShowDiff: @escaping (AgentSession) -> Void,
          settings: AppSettings, updater: AppUpdater?) {
         self.store = store
         self.usage = usage
@@ -159,6 +160,7 @@ final class EdgePanelController {
                                  onClearCompleted: { [weak self] in self?.clearCompleted() },
                                  onDismiss: { [weak self] in self?.dismiss($0) },
                                  onShowServers: { [weak self] in self?.showServers(of: $0) },
+                                 onShowDiff: onShowDiff,
                                  onEditAction: { [weak self] in self?.editAction($0) },
                                  onSaveAction: { [weak self] in self?.saveAction($0) },
                                  onShowActionLog: { [weak self] in self?.showLog(of: $0) },

@@ -10,6 +10,7 @@ public enum DiffStatsRefresh {
 @Observable
 public final class DiffStatsStore {
     public private(set) var stats: [String: DiffStats] = [:]
+    public private(set) var revisions: [String: Int] = [:]
 
     @ObservationIgnored private let computer: DiffStatsComputing?
     @ObservationIgnored private let repository: (String) -> String?
@@ -50,12 +51,18 @@ public final class DiffStatsStore {
         return trackers.values.filter { $0.checkout == checkout }.count - 1
     }
 
+    public func patches(for session: AgentSession) async -> [FilePatch]? {
+        guard let computer, let tracker = trackers[session.id], let baseline = tracker.baseline else { return nil }
+        return await computer.patches(in: tracker.checkout, since: baseline)
+    }
+
     public func update(_ sessions: [AgentSession]) {
         guard computer != nil else { return }
         let current = Dictionary(sessions.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         for id in trackers.keys where current[id] == nil {
             trackers[id] = nil
             stats[id] = nil
+            revisions[id] = nil
         }
         for (id, session) in current {
             let working = session.status == .working || session.status == .needsAttention
@@ -132,7 +139,10 @@ public final class DiffStatsStore {
             let result = await computer.stats(in: checkout, since: baseline)
             guard trackers[id]?.checkout == checkout else { return }
             trackers[id]?.running = false
-            if trackers[id]?.baseline == baseline, let result, stats[id] != result { stats[id] = result }
+            if trackers[id]?.baseline == baseline, let result {
+                if stats[id] != result { stats[id] = result }
+                revisions[id, default: 0] += 1
+            }
             if trackers[id]?.runAgain == true {
                 trackers[id]?.runAgain = false
                 requestRefresh(id)

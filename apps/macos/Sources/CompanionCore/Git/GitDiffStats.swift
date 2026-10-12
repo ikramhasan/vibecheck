@@ -3,6 +3,17 @@ import Foundation
 public protocol DiffStatsComputing: Sendable {
     func baseline(in checkout: String, at date: Date?) async -> String?
     func stats(in checkout: String, since baseline: String) async -> DiffStats?
+    func patches(in checkout: String, since baseline: String) async -> [FilePatch]?
+}
+
+public struct FilePatch: Hashable, Codable, Sendable {
+    public var patch: String
+    public var untracked: Bool
+
+    public init(patch: String, untracked: Bool = false) {
+        self.patch = patch
+        self.untracked = untracked
+    }
 }
 
 public struct GitDiffStats: DiffStatsComputing {
@@ -45,10 +56,60 @@ public struct GitDiffStats: DiffStatsComputing {
         return stats
     }
 
+    public func patches(in checkout: String, since baseline: String) async -> [FilePatch]? {
+        guard let tracked = await git(in: checkout, ["diff", "-M", "--no-color", "--no-ext-diff", "--no-textconv",
+                                                     "--src-prefix=a/", "--dst-prefix=b/", baseline, "--"]),
+              tracked.status == 0,
+              let untracked = await git(in: checkout, ["ls-files", "--others", "--exclude-standard", "-z"]),
+              untracked.status == 0 else { return nil }
+        var patches = Self.split(String(decoding: tracked.stdout, as: UTF8.self)).map { FilePatch(patch: $0) }
+        for path in untracked.stdout.split(separator: 0) where path.last != UInt8(ascii: "/") {
+            let path = String(decoding: path, as: UTF8.self)
+            let url = URL(fileURLWithPath: checkout).appending(path: path)
+            patches.append(FilePatch(patch: Self.newFilePatch(path: path, contents: Self.countableContents(url)),
+                                     untracked: true))
+        }
+        return patches
+    }
+
+    static func split(_ diff: String) -> [String] {
+        var files: [String] = []
+        var current = ""
+        for line in diff.split(separator: "\n", omittingEmptySubsequences: false) {
+            if line.hasPrefix("diff --git "), !current.isEmpty {
+                files.append(current)
+                current = ""
+            }
+            current += line
+            current += "\n"
+        }
+        if current.contains("diff --git ") { files.append(String(current.dropLast())) }
+        return files
+    }
+
+    static func newFilePatch(path: String, contents: Data?) -> String {
+        let header = "diff --git a/\(path) b/\(path)\nnew file mode 100644\n"
+        guard let contents, DiffStats.lineCount(of: contents) != nil else {
+            return header + "Binary files /dev/null and b/\(path) differ\n"
+        }
+        let text = String(decoding: contents, as: UTF8.self)
+        guard !text.isEmpty else { return header }
+        var lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+        let endsWithNewline = lines.last == ""
+        if endsWithNewline { lines.removeLast() }
+        var patch = header + "--- /dev/null\n+++ b/\(path)\n@@ -0,0 +1,\(lines.count) @@\n"
+        for line in lines { patch += "+" + line + "\n" }
+        if !endsWithNewline { patch += "\\ No newline at end of file\n" }
+        return patch
+    }
+
+    private static func countableContents(_ url: URL) -> Data? {
+        guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= largestCountedFile else { return nil }
+        return try? Data(contentsOf: url, options: .alwaysMapped)
+    }
+
     private static func newFileLines(_ url: URL) -> Int? {
-        guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= largestCountedFile,
-              let contents = try? Data(contentsOf: url, options: .alwaysMapped) else { return nil }
-        return DiffStats.lineCount(of: contents)
+        countableContents(url).flatMap(DiffStats.lineCount(of:))
     }
 
     private func commit(in checkout: String, _ arguments: [String]) async -> String? {
