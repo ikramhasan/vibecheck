@@ -6,6 +6,7 @@ import SwiftUI
 /// Icons are CodexBar's `ProviderIcon-<id>.svg` (MIT, synced by
 /// `scripts/sync-provider-icons.sh`), rendered as templates and tinted with the
 /// provider's brand colour, the same way CodexBar's menu draws them.
+/// Agents with a full-colour logo in `BrandIcons/` (lobe-icons, MIT) draw it as is instead.
 /// Unknown agents get a generic terminal glyph, so adding one never *requires* UI work.
 enum AgentAppearance {
     /// Providers that reuse another provider's icon (from CodexBar's descriptors).
@@ -121,6 +122,42 @@ enum AgentAppearance {
 
     @MainActor private static var cache: [String: NSImage] = [:]
     @MainActor private static var missing: Set<String> = []
+    @MainActor private static var brandCache: [String: NSImage] = [:]
+    @MainActor private static var brandMissing: Set<String> = []
+
+    @MainActor static func brandIcon(for id: String, dark: Bool) -> NSImage? {
+        let light = brandFile(id)
+        return dark ? brandFile(id + "_dark") ?? light : light
+    }
+
+    @MainActor private static func brandFile(_ name: String) -> NSImage? {
+        if let image = brandCache[name] { return image }
+        if brandMissing.contains(name) { return nil }
+        guard let url = iconBundle?.url(forResource: name, withExtension: "svg", subdirectory: "BrandIcons"),
+              let image = NSImage(contentsOf: url) else {
+            brandMissing.insert(name)
+            return nil
+        }
+        brandCache[name] = image
+        return image
+    }
+
+    @MainActor static func menuIcon(for id: String) -> NSImage? {
+        let size = NSSize(width: 16, height: 16)
+        if let light = brandIcon(for: id, dark: false), let dark = brandIcon(for: id, dark: true) {
+            return NSImage(size: size, flipped: false) { rect in
+                let isDark = NSAppearance.currentDrawing().bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                let scale = min(rect.width / light.size.width, rect.height / light.size.height)
+                let fitted = NSSize(width: light.size.width * scale, height: light.size.height * scale)
+                (isDark ? dark : light).draw(in: NSRect(x: rect.midX - fitted.width / 2, y: rect.midY - fitted.height / 2,
+                                                        width: fitted.width, height: fitted.height))
+                return true
+            }
+        }
+        guard let copy = icon(for: id)?.copy() as? NSImage else { return nil }
+        copy.size = size
+        return copy
+    }
 
     /// Template image for the agent, or nil when CodexBar has no icon for it.
     @MainActor static func icon(for id: String) -> NSImage? {
@@ -143,10 +180,16 @@ enum AgentAppearance {
 struct AgentGlyph: View {
     let agentID: String
     var size: CGFloat = 13
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Group {
-            if let icon = AgentAppearance.icon(for: agentID) {
+            if let brand = AgentAppearance.brandIcon(for: agentID, dark: colorScheme == .dark) {
+                Image(nsImage: brand)
+                    .resizable()
+                    .interpolation(.high)
+                    .aspectRatio(contentMode: .fit)
+            } else if let icon = AgentAppearance.icon(for: agentID) {
                 Image(nsImage: icon)
                     .renderingMode(.template)
                     .resizable()

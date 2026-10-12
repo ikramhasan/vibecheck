@@ -23,7 +23,7 @@ struct SettingsPage: View {
                 VStack(alignment: .leading, spacing: 16) {
                     SettingsSection("Agents",
                                     footer: "Status shows running sessions in the panel. Usage shows session and "
-                                        + "weekly limits, reset times and cost, fetched through CodexBar.") {
+                                        + "weekly limits and reset times, read with the agent's own sign-in.") {
                         AgentsList(settings: settings, store: store, usage: usage, agents: agents)
                     }
                     .cascade(shown: isShown, index: 1, side: .trailing, paced: paced)
@@ -201,8 +201,8 @@ private struct RowDivider: View {
 
 // MARK: - Agents
 
-/// The user's agent list with per-agent Status / Usage toggles and an Add menu fed by
-/// CodexBar's provider catalog. Nothing is auto-detected.
+/// The user's agent list with per-agent Status / Usage toggles and an Add menu listing
+/// the providers vibecheck can fetch usage for. Nothing is auto-detected.
 private struct AgentsList: View {
     @Bindable var settings: AppSettings
     let store: SessionStore
@@ -249,8 +249,8 @@ private struct AgentsList: View {
                             set: { settings.agents.setUsage($0, for: agent.id) }))
                             .labelsHidden()
                             .toggleStyle(.switch).controlSize(.mini)
-                            .disabled(!usageAvailable(agent.id))
-                            .help(usageAvailable(agent.id) ? "" : "CodexBar has no usage data for this agent")
+                            .disabled(!usage.supports(agent.id))
+                            .help(usage.supports(agent.id) ? "" : "Usage isn't available for this agent yet")
 
                         Button {
                             settings.agents.remove(agent.id)
@@ -274,81 +274,46 @@ private struct AgentsList: View {
         HStack {
             AddAgentMenu(settings: settings, usage: usage)
             Spacer()
-            switch usage.catalogState {
-            case .loading:
-                ProgressView().controlSize(.mini)
-            case .unavailable(let reason):
-                Label(reason, systemImage: "exclamationmark.triangle")
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(.orange)
-                    .lineLimit(1)
-                    .help(reason)
-            case .loaded:
-                Button("Refresh usage") { usage.refreshAll() }
-                    .buttonStyle(.glass)
-                    .controlSize(.small)
-                    .disabled(settings.agents.usage.isEmpty)
-            }
+            Button("Refresh usage") { usage.refreshAll() }
+                .buttonStyle(.glass)
+                .controlSize(.small)
+                .disabled(settings.agents.usage.isEmpty)
         }
         .frame(height: 38)
-    }
-
-    /// Usage needs a CodexBar provider with that id. Agents that only report sessions
-    /// (e.g. a custom integration) can't have usage.
-    private func usageAvailable(_ id: String) -> Bool {
-        usage.catalogState != .loaded || usage.catalog.contains { $0.id == id }
     }
 }
 
 private struct AddAgentMenu: View {
     @Bindable var settings: AppSettings
     let usage: UsageStore
-    @State private var showingPicker = false
-    @State private var query = ""
 
     var body: some View {
-        Button {
-            showingPicker = true
+        Menu {
+            ForEach(available) { provider in
+                Button {
+                    settings.agents.add(provider.id)
+                } label: {
+                    if let icon = AgentAppearance.menuIcon(for: provider.id) {
+                        Label { Text(provider.name) } icon: { Image(nsImage: icon) }
+                    } else {
+                        Text(provider.name)
+                    }
+                }
+            }
         } label: {
             Label("Add agent…", systemImage: "plus")
                 .font(.system(size: 12, weight: .medium))
         }
+        .menuIndicator(.hidden)
         .buttonStyle(.glass)
         .controlSize(.small)
-        .disabled(usage.catalog.isEmpty)
-        .popover(isPresented: $showingPicker, arrowEdge: .leading) {
-            VStack(alignment: .leading, spacing: 8) {
-                TextField("Search \(usage.catalog.count) providers", text: $query)
-                    .textFieldStyle(.roundedBorder)
-                List(available) { provider in
-                    Button {
-                        settings.agents.add(provider.id)
-                        showingPicker = false
-                        query = ""
-                    } label: {
-                        HStack(spacing: 8) {
-                            AgentGlyph(agentID: provider.id)
-                            Text(provider.name)
-                            Spacer()
-                            Text(provider.id).foregroundStyle(.tertiary).font(.system(size: 11))
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-                .listStyle(.plain)
-            }
-            .padding(12)
-            .frame(width: 300, height: 360)
-        }
+        .fixedSize()
+        .disabled(available.isEmpty)
     }
 
     private var available: [ProviderInfo] {
         let added = Set(settings.agents.added)
-        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
-        return usage.catalog.filter {
-            !added.contains($0.id) && (q.isEmpty || $0.name.lowercased().contains(q) || $0.id.contains(q))
-        }
+        return usage.catalog.filter { !added.contains($0.id) }
     }
 }
 

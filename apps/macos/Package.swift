@@ -13,7 +13,8 @@ let package = Package(
         // The macOS app: edge panel window + SwiftUI views.
         .executableTarget(name: "Vibecheck", dependencies: ["CompanionCore", .product(name: "Sparkle", package: "Sparkle")],
                           exclude: ["Orbs/LICENSE"],
-                          resources: [.copy("Resources/ProviderIcons"), .copy("Resources/FrameworkIcons")]),
+                          resources: [.copy("Resources/ProviderIcons"), .copy("Resources/BrandIcons"),
+                                      .copy("Resources/FrameworkIcons")]),
         .testTarget(name: "CompanionCoreTests", dependencies: ["CompanionCore"], resources: [.copy("Fixtures")]),
     ]
 )

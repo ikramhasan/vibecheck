@@ -54,13 +54,13 @@ extension LoaderSettings: Codable {
     }
 }
 
-/// The agents the user has chosen to track, and what to show for each. Ids are CodexBar
-/// provider ids, which are also the agent ids session integrations report ("pi",
-/// "claude", "codex", …). Nothing is auto-detected: the user adds agents in Settings.
+/// The agents the user has chosen to track, and what to show for each. Ids are the
+/// agent ids session integrations report ("pi", "claude", "codex", …), which usage
+/// providers share. Nothing is auto-detected: the user adds agents in Settings.
 public struct AgentPreferences: Equatable, Codable, Sendable {
     /// Agents the user added, in the order they added them.
     public private(set) var added: [String]
-    /// Opt-in per agent: each one costs a CodexBar fetch every refresh.
+    /// Opt-in per agent: each one costs a usage request every refresh.
     public private(set) var usage: Set<String>
     /// Running status is shown unless hidden here, so an agent whose integration
     /// reports sessions keeps working even if it was never added.

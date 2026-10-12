@@ -60,18 +60,28 @@ If an older build is still running, quit it first so the new one loads:
 pkill -x Vibecheck
 ```
 
-## Usage stats (CodexBar)
+## Usage stats
 
-The app bundles the [CodexBar](https://github.com/steipete/CodexBar) CLI (pinned, checksum-verified
-by `apps/macos/scripts/fetch-codexbar.sh`) in `Contents/Helpers/`. It supplies the provider list in
-Settings and each agent's 5h/weekly limits, reset times and local cost estimate. CLI reference:
-`docs/codexbar/cli.md`. Agent icons and brand colours also come from CodexBar (MIT); refresh them with
-`apps/macos/scripts/sync-provider-icons.sh`.
+vibecheck reads each agent's plan limits itself, using the sign-in the agent already has. Nothing
+extra is installed and no credentials are stored or refreshed; when a sign-in expires, run the agent
+once to renew it.
+
+| Agent | Sign-in it reads (read-only) | Shows |
+|---|---|---|
+| Claude | `~/.claude/.credentials.json`, or the `Claude Code-credentials` keychain item | 5h, weekly and per-model weekly limits |
+| Codex | `~/.codex/auth.json` | 5h, weekly (or monthly on free) and per-model limits |
+| Kiro | kiro-cli's `~/Library/Application Support/kiro-cli/data.sqlite3` | monthly credits and overage |
 
 In Settings → Agents, add agents and toggle **Status** (running sessions) and **Usage** per agent.
 With any usage enabled the tab stays visible even when no agent is running. Usage refreshes every
-5 minutes and when the panel opens with stale data. During `swift run`, set
-`VIBECHECK_CODEXBAR=/path/to/CodexBarCLI` or have `codexbar` installed via Homebrew.
+5 minutes, when the panel opens with stale data, and from the refresh button in the Usage header.
+
+The usage clients are ported from [CodexBar](https://github.com/steipete/CodexBar) (MIT). Agent
+icons and brand colours also come from CodexBar; refresh them with
+`apps/macos/scripts/sync-provider-icons.sh`. Agents with an official logo use it instead, drawn in
+its own colours from `Resources/BrandIcons/` (`<id>.svg`, plus `<id>_dark.svg` for dark mode): from
+[svgl](https://svgl.app) (MIT), and from [lobe-icons](https://github.com/lobehub/lobe-icons) (MIT)
+for Claude, Codex and Kiro. Logos remain their owners' trademarks.
 
 ## pi extension (optional)
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Syncs CodexBar's provider icons (MIT, © Peter Steinberger) into the app's resources.
-# Pinned to the same release as the bundled CLI; re-run after bumping VERSION.
+# Pinned to a CodexBar release; re-run after bumping VERSION.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

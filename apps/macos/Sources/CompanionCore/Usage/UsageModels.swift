@@ -1,7 +1,7 @@
 import Foundation
 
-/// A provider CodexBar knows about (`codexbar config providers`). Its `id` doubles as
-/// the agent id used by session integrations ("pi", "claude", "codex", …).
+/// A provider vibecheck can fetch usage for. Its `id` doubles as the agent id used by
+/// session integrations ("claude", "codex", …).
 public struct ProviderInfo: Hashable, Codable, Sendable, Identifiable {
     public var id: String
     public var name: String
@@ -29,9 +29,7 @@ public struct UsageWindow: Hashable, Sendable {
 
     public var remainingPercent: Double { max(0, 100 - usedPercent) }
 
-    /// Window names derived from its length are more reliable than CodexBar's labels
-    /// (e.g. Codex free reports a 30-day window labelled "Session").
-    static func label(minutes: Int?, fallback: String?) -> String {
+    static func label(minutes: Int?) -> String {
         switch minutes {
         case 300: "5h"
         case 1440: "Daily"
@@ -39,22 +37,27 @@ public struct UsageWindow: Hashable, Sendable {
         case 43200, 44640, 40320: "Monthly"
         case let m? where m > 0 && m < 1440 && m % 60 == 0: "\(m / 60)h"
         case let m? where m > 0 && m % 1440 == 0: "\(m / 1440)d"
-        default: fallback ?? "Usage"
+        default: "Usage"
         }
     }
 }
 
-/// Locally estimated spend (`codexbar cost`).
-public struct CostSummary: Hashable, Sendable {
-    public var todayUSD: Double?
-    public var periodUSD: Double?
-    public var periodLabel: String?
+public struct UsageReport: Hashable, Sendable {
+    public var plan: String?
+    public var windows: [UsageWindow]
 
-    public init(todayUSD: Double?, periodUSD: Double?, periodLabel: String? = nil) {
-        self.todayUSD = todayUSD
-        self.periodUSD = periodUSD
-        self.periodLabel = periodLabel
+    public init(plan: String? = nil, windows: [UsageWindow]) {
+        self.plan = plan
+        self.windows = windows
     }
+}
+
+public struct UsageError: Error, LocalizedError, Equatable {
+    public let message: String
+
+    public init(_ message: String) { self.message = message }
+
+    public var errorDescription: String? { message }
 }
 
 /// Everything the widget shows for one provider.
@@ -70,17 +73,15 @@ public struct ProviderUsage: Hashable, Sendable, Identifiable {
     public var state: State
     public var plan: String?
     public var windows: [UsageWindow]
-    public var cost: CostSummary?
     public var updatedAt: Date?
 
     public init(id: String, name: String, state: State = .loading, plan: String? = nil,
-                windows: [UsageWindow] = [], cost: CostSummary? = nil, updatedAt: Date? = nil) {
+                windows: [UsageWindow] = [], updatedAt: Date? = nil) {
         self.id = id
         self.name = name
         self.state = state
         self.plan = plan
         self.windows = windows
-        self.cost = cost
         self.updatedAt = updatedAt
     }
 
