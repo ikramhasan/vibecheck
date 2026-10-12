@@ -130,7 +130,6 @@ final class EdgePanelController {
     private var hoverTimer: Timer?
     private var removalTimer: Timer?
     private var pointerInside = false
-    private var shrinkWork: DispatchWorkItem?
     private var hideWork: DispatchWorkItem?
     private var pageSettleWork: DispatchWorkItem?
 
@@ -138,8 +137,8 @@ final class EdgePanelController {
     private let collapseDelay: TimeInterval = 0.28
     private var leftAt: Date?
     private var lastPointerOverCard: NSPoint?
-    /// Height the window is currently sized for. Grows immediately, shrinks after animations settle.
-    private var sizedForHeight: CGFloat = 0
+    private var expandedCardHeight: CGFloat = 0
+    private var collapsedCardHeight: CGFloat = 0
 
     init(store: SessionStore, usage: UsageStore, servers: DevServerStore, actions: ActionStore, diffs: DiffStatsStore,
          onShowDiff: @escaping (AgentSession) -> Void,
@@ -234,10 +233,10 @@ final class EdgePanelController {
         state.pageChanging = true
 
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        withAnimation(reduceMotion ? .easeOut(duration: 0.18) : .spring(response: 0.5, dampingFraction: 0.82)) {
+        withAnimation(reduceMotion ? .easeOut(duration: 0.18) : .spring(response: 0.32, dampingFraction: 0.86)) {
             state.page = page
         }
-        contentChanged() // window grows now / shrinks after the cascade, per the new page
+        contentChanged()
         servers.setVisible(page == .servers)
         presentation.setPinned(page.pinsPanel)
         apply(attentionArrived: false)
@@ -251,7 +250,7 @@ final class EdgePanelController {
 
         let work = DispatchWorkItem { [weak self] in self?.state.pageChanging = false }
         pageSettleWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: work)
     }
 
     private func showServers(of session: AgentSession) {
@@ -316,22 +315,10 @@ final class EdgePanelController {
         apply(attentionArrived: newlyNeedsAttention)
     }
 
-    /// Resize the window for the current content: grow now, shrink once the card has animated down.
+    /// Measure the card once per content change, so the 60 Hz hover poll doesn't regroup sessions.
     private func contentChanged() {
-        let needed = targetHeight
-        shrinkWork?.cancel()
-        if needed > sizedForHeight {
-            sizedForHeight = needed
-            reposition()
-        } else if needed < sizedForHeight {
-            let work = DispatchWorkItem { [weak self] in
-                guard let self else { return }
-                self.sizedForHeight = self.targetHeight
-                self.reposition()
-            }
-            shrinkWork = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: work)
-        }
+        expandedCardHeight = targetHeight
+        collapsedCardHeight = PanelMetrics.collapsedHeight(count: state.completed.visible(store.sessions).count)
     }
 
     private var targetHeight: CGFloat {
@@ -356,24 +343,20 @@ final class EdgePanelController {
 
     private var screen: NSScreen? { NSScreen.main ?? NSScreen.screens.first }
 
-    /// The window is sized for the fully expanded card (plus shadow room) and stays put
-    /// while the SwiftUI shape inside animates. That keeps the spring perfectly smooth.
+    /// The window spans the screen's full height and never resizes while the card animates
+    /// inside it: resizing mid-animation makes the card jump. Clicks outside the card pass through.
     private func reposition() {
         guard let screen else { return }
         let width = PanelMetrics.expandedWidth + PanelMetrics.shadowPadding
-        let height = max(sizedForHeight, targetHeight) + PanelMetrics.shadowPadding * 2
         let visible = screen.visibleFrame
-        let frame = NSRect(x: screen.frame.maxX - width,
-                           y: (visible.midY - height / 2).rounded(),
-                           width: width, height: height)
+        let frame = NSRect(x: screen.frame.maxX - width, y: visible.minY, width: width, height: visible.height)
         panel.setFrame(frame, display: true)
     }
 
     /// Screen-space rect of the visible card, matching EdgePanelView's layout.
     private func cardRect(expanded: Bool) -> NSRect {
-        let count = state.completed.visible(store.sessions).count
         let w = expanded ? PanelMetrics.expandedWidth : PanelMetrics.collapsedWidth
-        let h = expanded ? targetHeight : PanelMetrics.collapsedHeight(count: count)
+        let h = expanded ? expandedCardHeight : collapsedCardHeight
         let f = panel.frame
         return NSRect(x: f.maxX - w, y: f.midY - h / 2, width: w, height: h)
     }
@@ -397,6 +380,8 @@ final class EdgePanelController {
         let inside: Bool
         if presentation.mode == .expanded {
             inside = cardRect(expanded: true).insetBy(dx: -16, dy: -16).contains(mouse)
+            let overCard = cardRect(expanded: true).contains(mouse)
+            if panel.ignoresMouseEvents == overCard { panel.ignoresMouseEvents = !overCard }
         } else {
             let tab = cardRect(expanded: false)
             let edgeStrip = NSRect(x: tab.maxX - 3, y: tab.minY - 24, width: 3, height: tab.height + 48)
@@ -473,9 +458,9 @@ final class EdgePanelController {
             contentChanged()
         }
 
-        // Only accept clicks while open; the collapsed tab and hidden state must not
+        // Only accept clicks on the open card; the collapsed tab and hidden state must not
         // block clicks on whatever is underneath.
-        panel.ignoresMouseEvents = target != .expanded
+        panel.ignoresMouseEvents = target != .expanded || !cardRect(expanded: true).contains(NSEvent.mouseLocation)
 
         if target == .hidden {
             leftAt = nil

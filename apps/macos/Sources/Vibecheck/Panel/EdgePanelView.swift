@@ -93,6 +93,7 @@ struct EdgePanelView: View {
                                 onStopServer: servers.stopServer, onEditAction: onEditAction,
                                 onShowActionLog: onShowActionLog, onQuit: onQuit)
                     .frame(height: tabHeight(groups), alignment: .top)
+                    .environment(\.orbsOnScreen, expanded && !covered && !showsQuestions)
                     .opacity(showsQuestions ? 0 : 1)
                     .allowsHitTesting(!covered && !showsQuestions)
                     .accessibilityHidden(covered || showsQuestions)
@@ -121,19 +122,19 @@ struct EdgePanelView: View {
                              isShown: expanded && onSettings, paced: state.pageChanging,
                              onBack: onCloseSettings)
                     .frame(height: PanelMetrics.settingsHeight)
+                    .environment(\.orbsOnScreen, expanded && onSettings)
                     .allowsHitTesting(onSettings)
                     .accessibilityHidden(!onSettings)
             }
             .frame(width: PanelMetrics.expandedWidth, height: pageHeight(groups), alignment: .top)
             .opacity(expanded ? 1 : 0)
-            .blur(radius: expanded ? 0 : 6)
             .scaleEffect(expanded ? 1 : 0.96, anchor: .trailing)
 
             CollapsedContent(sessions: shown, groups: groups, servers: servers.servers,
                              usage: usage.usage)
                 .frame(width: PanelMetrics.collapsedWidth)
+                .environment(\.orbsOnScreen, state.mode == .collapsed)
                 .opacity(expanded ? 0 : 1)
-                .blur(radius: expanded ? 4 : 0)
         }
         .frame(width: width, height: height, alignment: .trailing)
         .clipShape(EdgeTabShape())
@@ -784,8 +785,10 @@ private struct SessionLine: View {
         .glassEffect(rowGlass, in: .rect(cornerRadius: 12, style: .continuous))
         .contentShape(Rectangle())
         .onHover { h in
-            // Resolve lazily: walking the process tree per render would be wasteful.
-            if h { target = SessionJumper.target(for: session) }
+            if h, target == nil {
+                let session = session
+                Task { target = await Task.detached(priority: .utility) { SessionJumper.target(for: session) }.value }
+            }
             withAnimation(.easeOut(duration: 0.12)) { hovering = h }
         }
         .onTapGesture { SessionJumper.jump(to: session) }

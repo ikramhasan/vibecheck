@@ -48,9 +48,9 @@ struct CascadeItem: ViewModifier {
     private func animation(step: Double) -> Animation {
         if reduceMotion { return .easeOut(duration: 0.18) }
         switch (shown, paced) {
-        case (true, true): return .spring(response: 0.42, dampingFraction: 0.86).delay(0.14 + step * 0.045)
+        case (true, true): return .spring(response: 0.3, dampingFraction: 0.86).delay(0.05 + step * 0.02)
         case (true, false): return .spring(response: 0.5, dampingFraction: 0.7).delay(0.04 + step * 0.04)
-        case (false, true): return .easeOut(duration: 0.2).delay(step * 0.03)
+        case (false, true): return .easeOut(duration: 0.12).delay(step * 0.01)
         case (false, false): return .easeOut(duration: 0.12)
         }
     }
