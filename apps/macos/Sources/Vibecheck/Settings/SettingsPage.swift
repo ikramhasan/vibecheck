@@ -117,6 +117,9 @@ struct SettingsPage: View {
         }
         .padding(.top, PanelMetrics.flare)
         .padding(.bottom, PanelMetrics.flare)
+        .onChange(of: isShown) { _, shown in
+            if shown { launchAtLogin?.refresh() }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Settings")
     }

@@ -19,7 +19,15 @@ final class LaunchAtLogin {
     }
 
     private init() {
-        isEnabled = SMAppService.mainApp.status == .enabled
+        isEnabled = Self.currentStatus
+    }
+
+    private static var currentStatus: Bool {
+        SMAppService.mainApp.status == .enabled
+    }
+
+    func refresh() {
+        isEnabled = Self.currentStatus
     }
 
     func setEnabled(_ enabled: Bool) {
@@ -28,6 +36,6 @@ final class LaunchAtLogin {
         } else {
             try? SMAppService.mainApp.unregister()
         }
-        isEnabled = SMAppService.mainApp.status == .enabled
+        refresh()
     }
 }
