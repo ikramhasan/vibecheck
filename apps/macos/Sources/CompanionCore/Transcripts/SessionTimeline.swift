@@ -14,8 +14,12 @@ public struct SessionTimeline: Equatable, Sendable {
     private var titleIsGenerated = true
     private var pending: [ToolCall] = []
 
-    static let defaultClaudeWindow = 200_000
-    static let largeClaudeWindow = 1_000_000
+    static let claudeWindow = 1_000_000
+    static let legacyClaudeWindow = 200_000
+    static let legacyClaudeModels = [
+        "claude-3", "claude-opus-4-0", "claude-sonnet-4-0", "claude-opus-4-2025", "claude-sonnet-4-2025",
+        "claude-opus-4-1", "claude-opus-4-5", "claude-sonnet-4-5", "claude-haiku-4-5",
+    ]
 
     public init() {}
 
@@ -66,9 +70,14 @@ public struct SessionTimeline: Equatable, Sendable {
             title = TranscriptText.oneLine(text)
             titleIsGenerated = generated
         case .contextUsage(let used, let window):
-            let window = window ?? (used > Self.defaultClaudeWindow ? Self.largeClaudeWindow : Self.defaultClaudeWindow)
+            let window = window ?? Self.claudeWindow(model: model, usedTokens: used)
             context = .init(usedTokens: used, windowTokens: window)
         }
+    }
+
+    static func claudeWindow(model: String?, usedTokens: Int) -> Int {
+        let isLegacy = model.map { model in legacyClaudeModels.contains { model.contains($0) } } ?? false
+        return isLegacy && usedTokens <= legacyClaudeWindow ? legacyClaudeWindow : claudeWindow
     }
 
     private mutating func startWorking(activity: String) {
