@@ -93,7 +93,7 @@ struct EdgePanelView: View {
                                 onStopServer: servers.stopServer, onEditAction: onEditAction,
                                 onShowActionLog: onShowActionLog, onQuit: onQuit)
                     .frame(height: tabHeight(groups), alignment: .top)
-                    .environment(\.orbsOnScreen, expanded && !covered && !showsQuestions)
+                    .environment(\.orbsOnScreen, expanded && state.page == .sessions && !showsQuestions)
                     .opacity(showsQuestions ? 0 : 1)
                     .allowsHitTesting(!covered && !showsQuestions)
                     .accessibilityHidden(covered || showsQuestions)
