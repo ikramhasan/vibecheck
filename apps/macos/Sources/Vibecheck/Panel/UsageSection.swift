@@ -132,13 +132,7 @@ private struct WindowRow: View {
         .accessibilityLabel(helpText)
     }
 
-    private var tint: Color {
-        switch window.usedPercent {
-        case ..<75: .green
-        case ..<90: .orange
-        default: .red
-        }
-    }
+    private var tint: Color { UsageTint.color(usedPercent: window.usedPercent) }
 
     private var helpText: String {
         var s = "\(window.label): \(Int(window.usedPercent.rounded()))% used"
@@ -146,6 +140,16 @@ private struct WindowRow: View {
             s += ", resets \(r.formatted(date: .abbreviated, time: .shortened))"
         }
         return s
+    }
+}
+
+enum UsageTint {
+    static func color(usedPercent: Double) -> Color {
+        switch usedPercent {
+        case ..<75: .green
+        case ..<90: .orange
+        default: .red
+        }
     }
 }
 

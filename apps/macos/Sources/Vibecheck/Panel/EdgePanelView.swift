@@ -126,7 +126,8 @@ struct EdgePanelView: View {
             .blur(radius: expanded ? 0 : 6)
             .scaleEffect(expanded ? 1 : 0.96, anchor: .trailing)
 
-            CollapsedContent(sessions: shown, groups: groups, servers: servers.servers)
+            CollapsedContent(sessions: shown, groups: groups, servers: servers.servers,
+                             usage: usage.usage)
                 .frame(width: PanelMetrics.collapsedWidth)
                 .opacity(expanded ? 0 : 1)
                 .blur(radius: expanded ? 4 : 0)
@@ -163,6 +164,7 @@ private struct CollapsedContent: View {
     let sessions: [AgentSession]
     let groups: [SessionGroup]
     let servers: [DevServer]
+    let usage: [ProviderUsage]
 
     var body: some View {
         let ordered = groups.flatMap { g in g.sessions.map { (g.project, $0) } }
@@ -185,11 +187,7 @@ private struct CollapsedContent: View {
                     .transition(.scale(scale: 0.3).combined(with: .opacity))
             }
             if sessions.isEmpty {
-                // Only usage to show: a quiet gauge so the tab still reads as something.
-                Image(systemName: "gauge.with.dots.needle.50percent")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(height: PanelMetrics.badgeSize)
+                UsageDial(usage: usage, size: PanelMetrics.badgeSize)
             }
             if ordered.count > visible.count {
                 Text("+\(ordered.count - visible.count)")
@@ -204,6 +202,57 @@ private struct CollapsedContent: View {
         let waiting = sessions.filter(\.needsAttention).count
         let base = "\(sessions.count) agent session\(sessions.count == 1 ? "" : "s")"
         return waiting > 0 ? base + ", \(waiting) waiting for you" : base
+    }
+}
+
+private struct UsageDial: View {
+    let usage: [ProviderUsage]
+    let size: CGFloat
+
+    private let lineWidth: CGFloat = 3
+    private let ringGap: CGFloat = 1.5
+
+    var body: some View {
+        let peaks = usage.prefix(3).map { $0.windows.map(\.usedPercent).max() }
+        ZStack {
+            ForEach(peaks.indices, id: \.self) { index in
+                UsageRing(usedPercent: peaks[index], lineWidth: lineWidth)
+                    .padding(CGFloat(index) * (lineWidth + ringGap) + lineWidth / 2)
+            }
+        }
+        .frame(width: size, height: size)
+        .help(helpText)
+    }
+
+    private var helpText: String {
+        usage.prefix(3).map { provider in
+            let peak = provider.windows.map(\.usedPercent).max()
+            return "\(provider.name): " + (peak.map { "\(Int($0.rounded()))%" } ?? "—")
+        }.joined(separator: "\n")
+    }
+}
+
+private struct UsageRing: View {
+    let usedPercent: Double?
+    let lineWidth: CGFloat
+
+    var body: some View {
+        let fraction = min(max((usedPercent ?? 0) / 100, 0), 1)
+        let tint = usedPercent.map { UsageTint.color(usedPercent: $0) } ?? .gray
+        ZStack {
+            Circle()
+                .stroke(tint.opacity(0.2), lineWidth: lineWidth)
+            Circle()
+                .trim(from: 0, to: fraction)
+                .stroke(AngularGradient(colors: [tint.opacity(0.55), tint],
+                                        center: .center,
+                                        startAngle: .zero,
+                                        endAngle: .degrees(360 * fraction)),
+                        style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .shadow(color: tint.opacity(0.5), radius: 2)
+        }
+        .rotationEffect(.degrees(-90))
+        .animation(.easeOut(duration: 0.4), value: fraction)
     }
 }
 
