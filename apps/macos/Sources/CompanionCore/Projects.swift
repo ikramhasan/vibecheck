@@ -71,8 +71,11 @@ public final class ProjectResolver: @unchecked Sendable {
     }
 
     public func checkout(for path: String) -> String {
-        let path = (path as NSString).standardizingPath
-        return gitDirectory(above: path).map { ($0 as NSString).deletingLastPathComponent } ?? path
+        repository(for: path) ?? (path as NSString).standardizingPath
+    }
+
+    public func repository(for path: String) -> String? {
+        gitDirectory(above: (path as NSString).standardizingPath).map { ($0 as NSString).deletingLastPathComponent }
     }
 
     public func mainCheckoutPath(for path: String) -> String {

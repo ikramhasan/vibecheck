@@ -8,6 +8,7 @@ VERSION="${1:-0.0.0}"
 
 swift build -c release
 scripts/fetch-codexbar.sh
+scripts/build-diff-viewer.sh
 BIN="$(swift build -c release --show-bin-path)/Vibecheck"
 APP="build/vibecheck.app"
 
@@ -19,6 +20,7 @@ install_name_tool -add_rpath @executable_path/../Frameworks "$APP/Contents/MacOS
 cp Icon/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 # SwiftPM resources (provider icons).
 cp -R "$(dirname "$BIN")/Vibecheck_Vibecheck.bundle" "$APP/Contents/Resources/"
+cp -R vendor/diff-viewer "$APP/Contents/Resources/DiffViewer"
 # CodexBar CLI finds its resource bundle next to itself, so they travel together.
 cp vendor/codexbar/CodexBarCLI "$APP/Contents/Helpers/CodexBarCLI"
 cp -R vendor/codexbar/CodexBar_CodexBarCore.bundle "$APP/Contents/Helpers/"
