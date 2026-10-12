@@ -53,8 +53,8 @@ import Testing
         return ClaudeUsage(credentialsFile: url, keychain: { keychain.map { Data($0.utf8) } }, now: { now })
     }
 
-    private static func credentials(expiresAt: Int) -> String {
-        #"{"claudeAiOauth":{"accessToken":"tok","expiresAt":\#(expiresAt),"subscriptionType":"max","rateLimitTier":"default_claude_max_20x"}}"#
+    private static func credentials(token: String = "tok", expiresAt: Int) -> String {
+        #"{"claudeAiOauth":{"accessToken":"\#(token)","expiresAt":\#(expiresAt),"subscriptionType":"max","rateLimitTier":"default_claude_max_20x"}}"#
     }
 
     @Test func readsClaudeCodesKeychainItemWhenThereIsNoFile() async throws {
@@ -62,9 +62,21 @@ import Testing
         #expect(try await claude.credentials() == .init(accessToken: "tok", plan: "Max 20x"))
     }
 
-    @Test func prefersTheCredentialsFile() async throws {
-        let claude = try provider(file: Self.credentials(expiresAt: 2_000_000), keychain: nil)
-        #expect(try await claude.credentials().accessToken == "tok")
+    @Test func prefersAValidCredentialsFile() async throws {
+        let claude = try provider(file: Self.credentials(token: "file", expiresAt: 2_000_000),
+                                  keychain: Self.credentials(token: "keychain", expiresAt: 2_000_000))
+        #expect(try await claude.credentials().accessToken == "file")
+    }
+
+    @Test func expiredFileFallsBackToTheKeychain() async throws {
+        let claude = try provider(file: Self.credentials(token: "file", expiresAt: 999_000),
+                                  keychain: Self.credentials(token: "keychain", expiresAt: 2_000_000))
+        #expect(try await claude.credentials().accessToken == "keychain")
+    }
+
+    @Test func expiredEverywhereIsReportedAsExpired() async throws {
+        let claude = try provider(file: Self.credentials(expiresAt: 999_000), keychain: "not json")
+        await #expect(throws: UsageError("Sign-in expired. Run claude to refresh it")) { try await claude.credentials() }
     }
 
     @Test func expiredTokenIsNotSentOrRefreshed() async throws {

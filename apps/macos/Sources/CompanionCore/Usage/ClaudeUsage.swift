@@ -41,15 +41,23 @@ public struct ClaudeUsage: UsageProvider {
     }
 
     func credentials() async throws -> Credentials {
-        var stored = try? Data(contentsOf: credentialsFile)
-        if stored == nil { stored = await keychain() }
-        guard let stored, let oauth = try? JSONDecoder().decode(CredentialsFile.self, from: stored).claudeAiOauth,
-              let token = oauth.accessToken, !token.isEmpty else {
-            throw UsageError("Not signed in. Run claude to sign in")
-        }
-        guard let expiresAt = oauth.expiresAt, Date(timeIntervalSince1970: expiresAt / 1000) > now() else {
+        let file = Self.oauth(try? Data(contentsOf: credentialsFile))
+        if let usable = usable(file) { return usable }
+        let keychain = Self.oauth(await keychain())
+        if let usable = usable(keychain) { return usable }
+        if file?.accessToken?.isEmpty == false || keychain?.accessToken?.isEmpty == false {
             throw UsageError("Sign-in expired. Run claude to refresh it")
         }
+        throw UsageError("Not signed in. Run claude to sign in")
+    }
+
+    private static func oauth(_ data: Data?) -> CredentialsFile.OAuth? {
+        data.flatMap { try? JSONDecoder().decode(CredentialsFile.self, from: $0).claudeAiOauth }
+    }
+
+    private func usable(_ oauth: CredentialsFile.OAuth?) -> Credentials? {
+        guard let oauth, let token = oauth.accessToken, !token.isEmpty, let expiresAt = oauth.expiresAt,
+              Date(timeIntervalSince1970: expiresAt / 1000) > now() else { return nil }
         return Credentials(accessToken: token,
                            plan: Self.planName(subscription: oauth.subscriptionType, tier: oauth.rateLimitTier))
     }
