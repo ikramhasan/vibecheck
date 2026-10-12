@@ -49,6 +49,29 @@ public struct DiffStats: Hashable, Sendable {
     }
 }
 
+/// What the diff window compares: the session's starting commit against the working tree.
+public struct DiffComparison: Equatable, Sendable {
+    public var branch: String?
+    public var baseline: String
+    public var since: Date?
+    public var baselineLeftHistory: Bool
+
+    public init(branch: String?, baseline: String, since: Date?, baselineLeftHistory: Bool) {
+        self.branch = branch
+        self.baseline = baseline
+        self.since = since
+        self.baselineLeftHistory = baselineLeftHistory
+    }
+
+    /// e.g. "perf/x · since b08b00c at 13:26 → working tree", with `since` already formatted.
+    public func summary(since formattedSince: String?) -> String {
+        var parts = [branch ?? "detached HEAD"]
+        parts.append("since \(baseline.prefix(7))\(formattedSince.map { " at \($0)" } ?? "") → working tree")
+        if baselineLeftHistory { parts.append("branch changed since then") }
+        return parts.joined(separator: " · ")
+    }
+}
+
 public enum DiffSummary {
     public static func count(_ value: Int) -> String {
         value >= 1000 ? String(format: "%.1fk", Double(value) / 1000) : "\(value)"

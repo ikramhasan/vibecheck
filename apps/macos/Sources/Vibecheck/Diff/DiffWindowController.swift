@@ -9,6 +9,7 @@ final class DiffWindowController: NSObject, NSWindowDelegate, WKScriptMessageHan
     private let webView: WKWebView
     private var ready = false
     private var session: AgentSession?
+    private var projectName = ""
     private var pending: [FilePatch]?
     private var loading = false
     private var loadAgain = false
@@ -37,6 +38,7 @@ final class DiffWindowController: NSObject, NSWindowDelegate, WKScriptMessageHan
         if self.session?.id != session.id { reset() }
         self.session = session
         window.title = StatusPresentation.headline(session)
+        projectName = project.name
         window.subtitle = "\(project.name) · changes since the session started"
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
@@ -74,8 +76,14 @@ final class DiffWindowController: NSObject, NSWindowDelegate, WKScriptMessageHan
         loading = true
         Task {
             let patches = await diffs.patches(for: session)
+            let comparison = await diffs.comparison(for: session)
             loading = false
-            if self.session?.id == session.id, let patches { send(patches) }
+            if self.session?.id == session.id {
+                if let patches { send(patches) }
+                if let comparison {
+                    window.subtitle = "\(projectName) · " + comparison.summary(since: comparison.since.map(Self.format))
+                }
+            }
             if loadAgain {
                 loadAgain = false
                 refresh()
@@ -93,6 +101,12 @@ final class DiffWindowController: NSObject, NSWindowDelegate, WKScriptMessageHan
         pending = nil
         guard ready else { return }
         webView.callAsyncJavaScript("vibecheck.reset()", arguments: [:], in: nil, in: .page)
+    }
+
+    private static func format(_ date: Date) -> String {
+        Calendar.current.isDateInToday(date)
+            ? date.formatted(date: .omitted, time: .shortened)
+            : date.formatted(.dateTime.month(.abbreviated).day().hour().minute())
     }
 
     private static func viewerDirectory() -> URL? {

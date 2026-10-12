@@ -43,6 +43,18 @@ public struct ProcessEntry: Equatable, Sendable {
     }
 }
 
+public struct TCPConnection: Equatable, Sendable {
+    public var localPort: UInt16
+    public var remoteAddress: String
+    public var remotePort: UInt16
+
+    public init(localPort: UInt16, remoteAddress: String, remotePort: UInt16) {
+        self.localPort = localPort
+        self.remoteAddress = remoteAddress
+        self.remotePort = remotePort
+    }
+}
+
 public enum ProcessScanner {
     public static func userProcesses() -> [ProcessEntry] {
         let uid = getuid()
@@ -95,6 +107,31 @@ public enum ProcessScanner {
             return UInt16(bigEndian: UInt16(truncatingIfNeeded: info.psi.soi_proto.pri_tcp.tcpsi_ini.insi_lport))
         }
         return Array(Set(ports)).sorted()
+    }
+
+    public static func tcpConnections(pid: Int32) -> [TCPConnection] {
+        fileDescriptors(pid).compactMap { fd -> TCPConnection? in
+            guard fd.proc_fdtype == PROX_FDTYPE_SOCKET else { return nil }
+            var info = socket_fdinfo()
+            let infoSize = Int32(MemoryLayout<socket_fdinfo>.size)
+            guard proc_pidfdinfo(pid, fd.proc_fd, PROC_PIDFDSOCKETINFO, &info, infoSize) == infoSize,
+                  info.psi.soi_kind == SOCKINFO_TCP,
+                  info.psi.soi_proto.pri_tcp.tcpsi_state == TSI_S_ESTABLISHED else { return nil }
+            let endpoint = info.psi.soi_proto.pri_tcp.tcpsi_ini
+            guard let address = remoteAddress(endpoint) else { return nil }
+            return TCPConnection(localPort: UInt16(bigEndian: UInt16(truncatingIfNeeded: endpoint.insi_lport)),
+                                 remoteAddress: address,
+                                 remotePort: UInt16(bigEndian: UInt16(truncatingIfNeeded: endpoint.insi_fport)))
+        }
+    }
+
+    private static func remoteAddress(_ endpoint: in_sockinfo) -> String? {
+        var buffer = [CChar](repeating: 0, count: Int(INET6_ADDRSTRLEN))
+        var endpoint = endpoint
+        let written = endpoint.insi_vflag & UInt8(INI_IPV6) != 0
+            ? inet_ntop(AF_INET6, &endpoint.insi_faddr.ina_6, &buffer, socklen_t(buffer.count))
+            : inet_ntop(AF_INET, &endpoint.insi_faddr.ina_46.i46a_addr4, &buffer, socklen_t(buffer.count))
+        return written == nil ? nil : String(cString: buffer)
     }
 
     public static func executablePath(pid: Int32) -> String? {

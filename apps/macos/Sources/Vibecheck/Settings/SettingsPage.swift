@@ -48,19 +48,27 @@ struct SettingsPage: View {
                     }
                     .cascade(shown: isShown, index: 2, side: .trailing, paced: paced)
 
+                    SettingsSection("Machines",
+                                    footer: "Shows Claude, Codex and pi sessions running on Linux machines you reach with ssh, "
+                                        + "such as an alias from ~/.ssh/config. vibecheck keeps one connection "
+                                        + "open and only reads on the other machine. Key-based login is required.") {
+                        MachinesList(settings: settings)
+                    }
+                    .cascade(shown: isShown, index: 3, side: .trailing, paced: paced)
+
                     SettingsSection("Sounds",
                                     footer: "Played when a session needs input, finishes, or fails. Sounds are "
                                         + "your Mac's alert sounds, including any added to ~/Library/Sounds.") {
                         SoundsList(settings: settings)
                     }
-                    .cascade(shown: isShown, index: 3, side: .trailing, paced: paced)
+                    .cascade(shown: isShown, index: 4, side: .trailing, paced: paced)
 
                     SettingsSection("Loading indicator",
                                     footer: "Shown while an agent is working. Agents without an override use this.",
                                     grouped: false) {
                         LoaderGallery(selection: $settings.loader.global)
                     }
-                    .cascade(shown: isShown, index: 4, side: .trailing, paced: paced)
+                    .cascade(shown: isShown, index: 5, side: .trailing, paced: paced)
 
                     if !agents.isEmpty {
                         SettingsSection("Per agent") {
@@ -71,7 +79,7 @@ struct SettingsPage: View {
                                 }
                             }
                         }
-                        .cascade(shown: isShown, index: 5, side: .trailing, paced: paced)
+                        .cascade(shown: isShown, index: 6, side: .trailing, paced: paced)
                     }
 
                     if let updater {
@@ -80,7 +88,7 @@ struct SettingsPage: View {
                                             + "you install an update.") {
                             UpdatesList(updater: updater)
                         }
-                        .cascade(shown: isShown, index: 6, side: .trailing, paced: paced)
+                        .cascade(shown: isShown, index: 7, side: .trailing, paced: paced)
                     }
                 }
                 .padding(.horizontal, 14)
@@ -425,6 +433,77 @@ private struct SoundRow: View {
         let current = settings.sounds.sound(for: event)
         guard let current, !SoundPlayer.available.contains(current) else { return SoundPlayer.available }
         return SoundPlayer.available + [current]
+    }
+}
+
+// MARK: - Machines
+
+private struct MachinesList: View {
+    @Bindable var settings: AppSettings
+    @Environment(RemoteMachines.self) private var machines
+    @State private var draft = ""
+
+    var body: some View {
+        ForEach(settings.remoteHosts, id: \.self) { host in
+            HStack(spacing: 8) {
+                Image(systemName: "network")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(host.alias)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.primary)
+                    Text(status(of: host))
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                Spacer(minLength: 6)
+                Button {
+                    settings.remoteHosts.removeAll { $0 == host }
+                } label: {
+                    Image(systemName: "minus.circle")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Remove \(host.alias)")
+                .accessibilityLabel("Remove \(host.alias)")
+            }
+            .frame(minHeight: 38)
+            RowDivider()
+        }
+        HStack(spacing: 8) {
+            TextField("ssh host, e.g. devbox", text: $draft)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12))
+                .onSubmit(add)
+            Button("Add", action: add)
+                .buttonStyle(.glass)
+                .controlSize(.small)
+                .disabled(RemoteHost(draft) == nil)
+        }
+        .frame(height: 38)
+        if !draft.trimmingCharacters(in: .whitespaces).isEmpty, RemoteHost(draft) == nil {
+            Text("Enter one ssh host or alias, like omaku or user@host.")
+                .font(.system(size: 10.5))
+                .foregroundStyle(.orange)
+                .padding(.bottom, 6)
+        }
+    }
+
+    private func add() {
+        guard let host = RemoteHost(draft), !settings.remoteHosts.contains(host) else { return }
+        settings.remoteHosts.append(host)
+        draft = ""
+    }
+
+    private func status(of host: RemoteHost) -> String {
+        switch machines.source(for: host)?.connection {
+        case .connected: "Connected"
+        case .failed(let message): message
+        case .connecting, nil: "Connecting…"
+        }
     }
 }
 

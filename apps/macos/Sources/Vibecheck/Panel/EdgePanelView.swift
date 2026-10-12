@@ -654,6 +654,15 @@ private struct ProjectGroupView: View {
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
+                if let host = group.project.host {
+                    HStack(spacing: 3) {
+                        Image(systemName: "network")
+                        Text(host)
+                    }
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                }
                 Spacer(minLength: 6)
                 if group.sessions.count > 1 {
                     Text("\(group.sessions.count) agents")
@@ -911,7 +920,7 @@ private struct SessionLine: View {
             parts.append("Running " + servers.map(\.summary).joined(separator: ", "))
         }
         if let diff { parts += DiffSummary.lines(diff, sharedWith: diffSharedWith) }
-        parts.append(ProjectPath.abbreviate(session.cwd))
+        parts.append((session.host.map { "\($0):" } ?? "") + ProjectPath.abbreviate(session.cwd))
         if let app = target?.appName { parts.append("Click to open \(app)") }
         return parts.joined(separator: "\n")
     }

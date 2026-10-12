@@ -108,7 +108,7 @@ private struct ServerRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
         .accessibilityAddTraits(.isButton)
-        .accessibilityHint(server.url == nil ? "Brings the app forward" : "Opens it in your browser")
+        .accessibilityHint(server.url != nil ? "Opens it in your browser" : server.remote == nil ? "Brings the app forward" : "")
         .accessibilityAction(.default) { open() }
         .accessibilityActions {
             if server.url != nil { Button("Copy URL") { copy() } }
@@ -137,8 +137,10 @@ private struct ServerRow: View {
                         RowAction(systemImage: "folder", label: server.appPath == nil ? "Reveal project in Finder"
                                   : "Reveal app in Finder", action: reveal)
                     }
-                    RowAction(systemImage: "arrow.up.right",
-                              label: server.url == nil ? "Bring to front" : "Open in browser", action: open)
+                    if server.url != nil || server.remote == nil {
+                        RowAction(systemImage: "arrow.up.right",
+                                  label: server.url == nil ? "Bring to front" : "Open in browser", action: open)
+                    }
                     if server.canStop { stopButton }
                 }
             }
@@ -180,26 +182,37 @@ private struct ServerRow: View {
 
     private var projectLabel: String {
         guard let cwd = server.cwd else { return server.framework == .docker ? "Container" : "Unknown folder" }
+        if let remote = server.remote { return "\(URL(fileURLWithPath: cwd).lastPathComponent) · \(remote.host)" }
         let project = ProjectIcons.shared.project(for: cwd)
         guard cwd.hasPrefix(project.root + "/") else { return project.name }
         return project.name + cwd.dropFirst(project.root.count)
     }
 
     private var tooltip: String {
-        var lines = server.ports.isEmpty ? [] : [server.ports.map { "localhost:\($0)" }.joined(separator: ", ")]
-        if let path = server.appPath ?? server.cwd { lines.append(ProjectPath.abbreviate(path)) }
+        let host = server.remote?.host ?? "localhost"
+        var lines = server.ports.isEmpty ? [] : [server.ports.map { "\(host):\($0)" }.joined(separator: ", ")]
+        if let path = server.appPath ?? server.cwd {
+            lines.append(server.remote == nil ? ProjectPath.abbreviate(path) : "\(host):\(path)")
+        }
+        if server.remote != nil && server.url == nil {
+            lines.append("Only reachable on \(host) itself: it listens on localhost there")
+        }
         if let session { lines.append("Started by \(session.agent.name): \(StatusPresentation.headline(session))") }
         if server.hostsAgent { lines.append("Runs an agent session, so it can't be quit from here") }
-        lines.append(server.url == nil ? "Click to bring it to the front" : "Click to open in your browser")
+        if server.url != nil {
+            lines.append("Click to open in your browser")
+        } else if server.remote == nil {
+            lines.append("Click to bring it to the front")
+        }
         return lines.joined(separator: "\n")
     }
 
-    private var revealPath: String? { server.appPath ?? server.cwd }
+    private var revealPath: String? { server.remote == nil ? server.appPath ?? server.cwd : nil }
 
     private func open() {
         if let url = server.url {
             NSWorkspace.shared.open(url)
-        } else {
+        } else if server.remote == nil {
             NSRunningApplication(processIdentifier: server.pid)?.activate()
         }
     }

@@ -110,15 +110,19 @@ public struct AgentSession: Identifiable, Hashable, Sendable {
         }
     }
 
-    /// Globally unique: agent id + agent session id.
-    public var id: String { "\(agent.id)/\(sessionID)" }
+    /// Globally unique: agent id + agent session id, plus the machine for remote sessions.
+    public var id: String { host.map { "\(agent.id)/\(sessionID)@\($0)" } ?? "\(agent.id)/\(sessionID)" }
 
     public var agent: AgentInfo
     public var sessionID: String
     public var cwd: String
+    /// The ssh host the agent runs on; `nil` for this Mac. Remote sessions have no local `pid`.
+    public var host: String?
     public var name: String?
     public var model: String?
     public var pid: Int32?
+    /// For a remote session, the ssh process on this Mac that carries it. Jumping goes through it.
+    public var sshPID: Int32?
     public var origin: Origin?
     public var status: Status
     public var task: String?

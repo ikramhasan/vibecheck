@@ -163,6 +163,11 @@ public final class AppSettings {
         didSet { if sounds != oldValue { save(sounds, key: Keys.sounds) } }
     }
 
+    /// ssh destinations whose agent sessions the panel shows alongside this Mac's.
+    public var remoteHosts: [RemoteHost] {
+        didSet { if remoteHosts != oldValue { save(remoteHosts, key: Keys.remoteHosts) } }
+    }
+
     @ObservationIgnored private let defaults: UserDefaults
 
     private enum Keys {
@@ -170,6 +175,7 @@ public final class AppSettings {
         static let agents = "settings.agents"
         static let finishedSessionRemoval = "settings.finishedSessionRemoval"
         static let sounds = "settings.sounds"
+        static let remoteHosts = "settings.remoteHosts"
     }
 
     public init(defaults: UserDefaults = .standard) {
@@ -179,6 +185,7 @@ public final class AppSettings {
         finishedSessionRemoval = defaults.string(forKey: Keys.finishedSessionRemoval)
             .flatMap(FinishedSessionRemoval.init(rawValue:)) ?? .default
         sounds = Self.load(SoundSettings.self, key: Keys.sounds, from: defaults) ?? .default
+        remoteHosts = Self.load([RemoteHost].self, key: Keys.remoteHosts, from: defaults) ?? []
     }
 
     private func save<T: Encodable>(_ value: T, key: String) {

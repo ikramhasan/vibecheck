@@ -1,13 +1,23 @@
 import Foundation
 
 public enum ClaudeDiscovery {
-    private struct RegistryEntry: Decodable {
+    struct RegistryEntry: Decodable {
         var pid: Int32
         var sessionId: String
         var cwd: String
         var name: String?
         var status: String?
         var startedAt: Double?
+
+        var startedDate: Date? { startedAt.map { Date(timeIntervalSince1970: $0 / 1000) } }
+
+        var transcriptPath: String { "\(ClaudeDiscovery.projectDirectoryName(cwd))/\(sessionId).jsonl" }
+
+        func liveSession(transcript: URL?, origin: AgentSession.Origin?) -> LiveSession {
+            LiveSession(agent: AgentIdentity.claude, sessionID: sessionId, format: .claude, transcript: transcript,
+                        pid: pid, cwd: cwd, name: name, origin: origin, startedAt: startedDate,
+                        statusWithoutTranscript: status == "busy" ? .working : .idle)
+        }
     }
 
     public static func discover(claudeDirectory: URL, isAlive: (Int32) -> Bool,
@@ -20,14 +30,9 @@ public enum ClaudeDiscovery {
                   isAlive(entry.pid) else { return nil }
             let transcript = claudeDirectory
                 .appendingPathComponent("projects", isDirectory: true)
-                .appendingPathComponent(projectDirectoryName(entry.cwd), isDirectory: true)
-                .appendingPathComponent("\(entry.sessionId).jsonl")
-            return LiveSession(agent: AgentIdentity.claude, sessionID: entry.sessionId, format: .claude,
-                               transcript: FileManager.default.fileExists(atPath: transcript.path) ? transcript : nil,
-                               pid: entry.pid, cwd: entry.cwd, name: entry.name,
-                               origin: process(entry.pid)?.origin,
-                               startedAt: entry.startedAt.map { Date(timeIntervalSince1970: $0 / 1000) },
-                               statusWithoutTranscript: entry.status == "busy" ? .working : .idle)
+                .appendingPathComponent(entry.transcriptPath)
+            return entry.liveSession(transcript: FileManager.default.fileExists(atPath: transcript.path) ? transcript : nil,
+                                     origin: process(entry.pid)?.origin)
         }
     }
 
