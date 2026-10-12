@@ -7,6 +7,7 @@ struct SettingsPage: View {
     @Bindable var settings: AppSettings
     let store: SessionStore
     let usage: UsageStore
+    let updater: AppUpdater?
     /// The page is the one on screen (panel expanded and Settings selected).
     let isShown: Bool
     /// Page change (staggered hand-off) vs. panel expand/collapse.
@@ -71,6 +72,15 @@ struct SettingsPage: View {
                             }
                         }
                         .cascade(shown: isShown, index: 5, side: .trailing, paced: paced)
+                    }
+
+                    if let updater {
+                        SettingsSection("Updates",
+                                        footer: "vibecheck checks once a day and shows what changed before "
+                                            + "you install an update.") {
+                            UpdatesList(updater: updater)
+                        }
+                        .cascade(shown: isShown, index: 6, side: .trailing, paced: paced)
                     }
                 }
                 .padding(.horizontal, 14)
@@ -415,6 +425,43 @@ private struct SoundRow: View {
         let current = settings.sounds.sound(for: event)
         guard let current, !SoundPlayer.available.contains(current) else { return SoundPlayer.available }
         return SoundPlayer.available + [current]
+    }
+}
+
+// MARK: - Updates
+
+private struct UpdatesList: View {
+    @Bindable var updater: AppUpdater
+
+    var body: some View {
+        HStack {
+            Text("Check for updates automatically")
+                .font(.system(size: 12))
+                .foregroundStyle(.primary)
+            Spacer(minLength: 6)
+            Toggle("Check for updates automatically", isOn: $updater.checksAutomatically)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+        }
+        .frame(height: 30)
+
+        RowDivider()
+        HStack {
+            Text(version)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button("Check for Updates…") { updater.checkForUpdates() }
+                .buttonStyle(.glass)
+                .controlSize(.small)
+                .disabled(!updater.canCheckForUpdates)
+        }
+        .frame(height: 38)
+    }
+
+    private var version: String {
+        "Version " + (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
     }
 }
 

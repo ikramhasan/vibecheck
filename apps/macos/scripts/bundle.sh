@@ -12,8 +12,10 @@ BIN="$(swift build -c release --show-bin-path)/Vibecheck"
 APP="build/vibecheck.app"
 
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Helpers" "$APP/Contents/Resources"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Helpers" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 cp "$BIN" "$APP/Contents/MacOS/Vibecheck"
+ditto "$(dirname "$BIN")/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
+install_name_tool -add_rpath @executable_path/../Frameworks "$APP/Contents/MacOS/Vibecheck"
 cp Icon/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 # SwiftPM resources (provider icons).
 cp -R "$(dirname "$BIN")/Vibecheck_Vibecheck.bundle" "$APP/Contents/Resources/"
@@ -37,6 +39,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSMinimumSystemVersion</key><string>26.0</string>
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
+  <key>SUFeedURL</key><string>https://raw.githubusercontent.com/ikramhasan/homebrew-tap/main/appcast.xml</string>
+  <key>SUPublicEDKey</key><string>S/wgXQZ30k26DJL1yAHhoVhjq7XnmAQyPhkIzMkIE6s=</string>
+  <key>SUEnableAutomaticChecks</key><true/>
   <key>NSAppleEventsUsageDescription</key><string>vibecheck selects the terminal tab an agent is running in when you click its session.</string>
 </dict>
 </plist>

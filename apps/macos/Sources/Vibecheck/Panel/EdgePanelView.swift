@@ -31,6 +31,7 @@ struct EdgePanelView: View {
     let usage: UsageStore
     let servers: DevServerStore
     let actions: ActionStore
+    let updater: AppUpdater?
     let state: PanelState
     let onSelectTab: (PanelPage) -> Void
     let onOpenSettings: () -> Void
@@ -114,7 +115,7 @@ struct EdgePanelView: View {
                     .allowsHitTesting(showsQuestions)
                     .accessibilityHidden(!showsQuestions)
 
-                SettingsPage(settings: settings, store: store, usage: usage,
+                SettingsPage(settings: settings, store: store, usage: usage, updater: updater,
                              isShown: expanded && onSettings, paced: state.pageChanging,
                              onBack: onCloseSettings)
                     .frame(height: PanelMetrics.settingsHeight)
