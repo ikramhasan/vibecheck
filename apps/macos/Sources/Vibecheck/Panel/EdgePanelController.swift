@@ -142,7 +142,7 @@ final class EdgePanelController {
 
     init(store: SessionStore, usage: UsageStore, servers: DevServerStore, actions: ActionStore, diffs: DiffStatsStore,
          onShowDiff: @escaping (AgentSession) -> Void,
-         settings: AppSettings, machines: RemoteMachines, updater: AppUpdater?) {
+         settings: AppSettings, machines: RemoteMachines, updater: AppUpdater?, launchAtLogin: LaunchAtLogin?) {
         self.store = store
         self.usage = usage
         self.servers = servers
@@ -151,6 +151,7 @@ final class EdgePanelController {
         panel = EdgePanel(contentRect: .zero)
 
         let root = EdgePanelView(store: store, usage: usage, servers: servers, actions: actions, diffs: diffs, updater: updater,
+                                 launchAtLogin: launchAtLogin,
                                  state: state,
                                  onSelectTab: { [weak self] in self?.showPage($0) },
                                  onOpenSettings: { [weak self] in self?.showPage(.settings) },

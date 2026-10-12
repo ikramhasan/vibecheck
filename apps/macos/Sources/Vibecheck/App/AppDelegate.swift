@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var diffWindow: DiffWindowController?
     private var controller: EdgePanelController?
     private var updater: AppUpdater?
+    private var launchAtLogin: LaunchAtLogin?
     private var soundPlanner = SoundPlanner()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -34,10 +35,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                              repository: { ProjectIcons.shared.resolver.repository(for: $0) },
                              remoteGit: { machines.git(on: $0) })
         let updater = AppUpdater.bundled()
+        let launchAtLogin = args.contains("--demo") ? nil : LaunchAtLogin.bundled()
         let diffWindow = DiffWindowController(diffs: diffs)
         let controller = EdgePanelController(store: store, usage: usage, servers: servers, actions: actions, diffs: diffs,
                                              onShowDiff: { diffWindow?.show($0, project: ProjectIcons.shared.project(for: $0.cwd)) },
-                                             settings: settings, machines: machines, updater: updater)
+                                             settings: settings, machines: machines, updater: updater,
+                                             launchAtLogin: launchAtLogin)
         self.store = store
         self.usage = usage
         self.servers = servers
@@ -47,6 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.diffWindow = diffWindow
         self.controller = controller
         self.updater = updater
+        self.launchAtLogin = launchAtLogin
 
         observeAgentPreferences(settings) { prefs in
             store.setHiddenAgents(prefs.hiddenStatus)
