@@ -10,7 +10,7 @@ import OSLog
 enum SessionJumper {
     private nonisolated static let log = Logger(subsystem: "com.ikramulhasan.vibecheck", category: "jump")
 
-    static func target(for session: AgentSession) -> JumpTarget? {
+    nonisolated static func target(for session: AgentSession) -> JumpTarget? {
         JumpResolver.resolve(origin: session.origin, ancestry: localPID(of: session).map(ProcessTree.ancestry) ?? [])
     }
 
@@ -37,7 +37,7 @@ enum SessionJumper {
     }
 
     /// The agent itself, or for a remote session the ssh process that carries it.
-    private static func localPID(of session: AgentSession) -> Int32? {
+    private nonisolated static func localPID(of session: AgentSession) -> Int32? {
         session.pid ?? session.sshPID
     }
 
