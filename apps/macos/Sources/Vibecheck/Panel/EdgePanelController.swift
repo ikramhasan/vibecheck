@@ -15,8 +15,9 @@ enum PanelMetrics {
     static let collapsedWidth: CGFloat = 44
     static let badgeSize: CGFloat = 26
     static let collapsedSlot: CGFloat = badgeSize + 7
-    static func collapsedHeight(count: Int) -> CGFloat {
-        let slots = min(max(count, 1), maxVisible) + (count > maxVisible ? 1 : 0)
+    static func collapsedHeight(count: Int, hasUsage: Bool) -> CGFloat {
+        let badges = min(count, maxVisible) + (count > maxVisible ? 1 : 0) + (hasUsage ? 1 : 0)
+        let slots = max(badges, 1)
         return flare * 2 + 16 + CGFloat(slots) * collapsedSlot
     }
 
@@ -319,7 +320,8 @@ final class EdgePanelController {
     /// Measure the card once per content change, so the 60 Hz hover poll doesn't regroup sessions.
     private func contentChanged() {
         expandedCardHeight = targetHeight
-        collapsedCardHeight = PanelMetrics.collapsedHeight(count: state.completed.visible(store.sessions).count)
+        collapsedCardHeight = PanelMetrics.collapsedHeight(count: state.completed.visible(store.sessions).count,
+                                                           hasUsage: !usage.usage.isEmpty)
     }
 
     private var targetHeight: CGFloat {

@@ -64,7 +64,7 @@ struct EdgePanelView: View {
     var body: some View {
         let groups = groups
         let width = expanded ? PanelMetrics.expandedWidth : PanelMetrics.collapsedWidth
-        let height = expanded ? pageHeight(groups) : PanelMetrics.collapsedHeight(count: count)
+        let height = expanded ? pageHeight(groups) : PanelMetrics.collapsedHeight(count: count, hasUsage: !usage.usage.isEmpty)
 
         ZStack(alignment: .trailing) {
             Color.clear
@@ -193,14 +193,14 @@ private struct CollapsedContent: View {
                              runsServer: servers.contains { $0.wasStarted(by: session) })
                     .transition(.scale(scale: 0.3).combined(with: .opacity))
             }
-            if sessions.isEmpty {
-                UsageDial(usage: usage, size: PanelMetrics.badgeSize)
-            }
             if ordered.count > visible.count {
                 Text("+\(ordered.count - visible.count)")
                     .font(.system(size: 10, weight: .semibold).monospacedDigit())
                     .foregroundStyle(.secondary)
                     .frame(height: PanelMetrics.badgeSize)
+            }
+            if !usage.isEmpty {
+                UsageDial(usage: usage, size: PanelMetrics.badgeSize)
             }
         }
     }
