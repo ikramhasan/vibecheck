@@ -1,0 +1,8 @@
+{"type":"user","isSidechain":false,"message":{"role":"user","content":"Build the app and watch the logs"}}
+{"type":"assistant","isSidechain":false,"message":{"model":"claude-opus-5-5","role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"npm run build","run_in_background":true}}],"stop_reason":"tool_use"}}
+{"type":"user","isSidechain":false,"toolUseResult":{"stdout":"","stderr":"","backgroundTaskId":"bbuild"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"Command running in background with ID: bbuild."}]}}
+{"type":"assistant","isSidechain":false,"message":{"model":"claude-opus-5-5","role":"assistant","content":[{"type":"tool_use","id":"t2","name":"Monitor","input":{"description":"build errors","command":"tail -f build.log"}}],"stop_reason":"tool_use"}}
+{"type":"user","isSidechain":false,"toolUseResult":{"taskId":"bwatch","timeoutMs":1800000,"persistent":false},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t2","content":"Monitor started (task bwatch)."}]}}
+{"type":"assistant","isSidechain":false,"message":{"model":"claude-opus-5-5","role":"assistant","content":[{"type":"tool_use","id":"t3","name":"Monitor","input":{"description":"server logs","command":"tail -f server.log","persistent":true}}],"stop_reason":"tool_use"}}
+{"type":"user","isSidechain":false,"toolUseResult":{"taskId":"bserver","timeoutMs":0,"persistent":true},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t3","content":"Monitor started (task bserver)."}]}}
+{"type":"assistant","isSidechain":false,"message":{"model":"claude-opus-5-5","role":"assistant","content":[{"type":"text","text":"I'll wait for the build."}],"stop_reason":"end_turn"}}

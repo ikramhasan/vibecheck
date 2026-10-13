@@ -8,6 +8,8 @@ public enum TranscriptEvent: Equatable, Sendable {
     case assistantText(String)
     case toolCall(ToolCall)
     case toolResult(id: String)
+    case backgroundStarted(BackgroundTask)
+    case backgroundEnded(ids: [String])
     case turnEnded
     case interrupted
     case limitReached(String)
@@ -33,6 +35,18 @@ public struct ToolCall: Equatable, Sendable {
         self.kind = kind
         self.subject = subject
         self.questions = questions
+    }
+}
+
+public struct BackgroundTask: Equatable, Sendable {
+    public enum Kind: Equatable, Sendable { case command, monitor, agent }
+
+    public var id: String
+    public var kind: Kind
+
+    public init(id: String, kind: Kind) {
+        self.id = id
+        self.kind = kind
     }
 }
 

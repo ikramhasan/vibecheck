@@ -200,6 +200,11 @@ private struct CollapsedContent: View {
                     .frame(height: PanelMetrics.badgeSize)
             }
             if !usage.isEmpty {
+                if !visible.isEmpty {
+                    Capsule()
+                        .fill(.separator)
+                        .frame(width: PanelMetrics.badgeSize * 0.6, height: PanelMetrics.usageDivider)
+                }
                 UsageDial(usage: usage, size: PanelMetrics.badgeSize)
             }
         }
@@ -269,7 +274,8 @@ private struct SessionBadge: View {
     let runsServer: Bool
 
     var body: some View {
-        StatusIndicator(session: session, size: PanelMetrics.badgeSize)
+        StatusIndicator(session: session, size: PanelMetrics.collapsedOrbSize)
+            .frame(width: PanelMetrics.badgeSize, height: PanelMetrics.badgeSize)
             .overlay(alignment: .topTrailing) {
                 if runsServer {
                     PromptGlyph(size: 7, lineWidth: 1.3)

@@ -15,11 +15,15 @@ enum PanelMetrics {
     static let collapsedWidth: CGFloat = 44
     static let badgeSize: CGFloat = 26
     static let collapsedSlot: CGFloat = badgeSize + 7
+    static let collapsedOrbSize: CGFloat = 31
     static func collapsedHeight(count: Int, hasUsage: Bool) -> CGFloat {
         let badges = min(count, maxVisible) + (count > maxVisible ? 1 : 0) + (hasUsage ? 1 : 0)
         let slots = max(badges, 1)
-        return flare * 2 + 16 + CGFloat(slots) * collapsedSlot
+        let divider = hasUsage && count > 0 ? usageDivider + collapsedSlot - badgeSize : 0
+        return flare * 2 + 16 + CGFloat(slots) * collapsedSlot + divider
     }
+
+    static let usageDivider: CGFloat = 1
 
     static let expandedWidth: CGFloat = 340
     static let headerHeight: CGFloat = 44
