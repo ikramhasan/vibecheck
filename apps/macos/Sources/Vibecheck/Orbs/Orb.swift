@@ -42,28 +42,19 @@ struct Orb: View {
     var size: CGFloat = 20
     var color: Color
     var animated = true
-    @State private var holder = OrbHolder()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.orbsOnScreen) private var onScreen
 
     var body: some View {
-        let model = holder.model(look: look, size: Double(size))
-        let still = !animated || reduceMotion
         let light = colorScheme == .light
-        let floor = light ? 0.35 : 0.2
-        let ink = light ? color.mix(with: .black, by: 0.25) : color
-        TimelineView(.animation(minimumInterval: 1.0 / 60, paused: still || !onScreen)) { context in
-            let t = still ? 0 : context.date.timeIntervalSince(OrbClock.epoch) * 1000
-            Canvas { ctx, _ in
-                model.draw(t: t) { x, y, r, a in
-                    ctx.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r)),
-                             with: .color(ink.opacity(floor + (1 - floor) * a)))
-                }
-            }
-        }
-        .frame(width: size, height: size)
-        .accessibilityHidden(true)
+        OrbCanvas(look: look, size: Double(size),
+                  ink: NSColor(light ? color.mix(with: .black, by: 0.25) : color),
+                  floor: light ? 0.35 : 0.2,
+                  still: !animated || reduceMotion,
+                  playing: onScreen)
+            .frame(width: size, height: size)
+            .accessibilityHidden(true)
     }
 }
 
@@ -75,15 +66,118 @@ private enum OrbClock {
     static let epoch = Date.now
 }
 
-@MainActor
-private final class OrbHolder {
-    private var current: OrbModel?
+private struct OrbCanvas: NSViewRepresentable {
+    let look: OrbLook
+    let size: Double
+    let ink: NSColor
+    let floor: Double
+    let still: Bool
+    let playing: Bool
 
-    func model(look: OrbLook, size: Double) -> OrbModel {
-        if let current, current.look == look, current.size == size { return current }
-        let made = OrbModel(look: look, size: size)
-        current = made
-        return made
+    func makeNSView(context: Context) -> OrbView { OrbView() }
+
+    func updateNSView(_ view: OrbView, context: Context) {
+        view.show(look: look, size: size, ink: ink, floor: floor, still: still, playing: playing)
+    }
+}
+
+private final class OrbView: NSView {
+    private let orb = OrbLayer()
+    private var ink = NSColor.clear
+    private var playing = false
+    private var displayLink: CADisplayLink?
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.addSublayer(orb)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    func show(look: OrbLook, size: Double, ink: NSColor, floor: Double, still: Bool, playing: Bool) {
+        if orb.model?.look != look || orb.model?.size != size {
+            orb.model = OrbModel(look: look, size: size)
+        }
+        self.ink = ink
+        self.playing = playing
+        orb.floor = floor
+        orb.still = still
+        resolveInk()
+        updateDisplayLink()
+    }
+
+    override func layout() {
+        super.layout()
+        orb.frame = bounds
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        resolveInk()
+    }
+
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        orb.contentsScale = window?.backingScaleFactor ?? 2
+        orb.setNeedsDisplay()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        updateDisplayLink()
+    }
+
+    private func resolveInk() {
+        effectiveAppearance.performAsCurrentDrawingAppearance { orb.ink = ink.cgColor }
+        orb.setNeedsDisplay()
+    }
+
+    private func updateDisplayLink() {
+        let running = window != nil && playing && !orb.still
+        if running, displayLink == nil {
+            let link = displayLink(target: self, selector: #selector(nextFrame))
+            link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
+            link.add(to: .main, forMode: .common)
+            displayLink = link
+        } else if !running, let link = displayLink {
+            link.invalidate()
+            displayLink = nil
+        }
+    }
+
+    @objc private func nextFrame() {
+        orb.setNeedsDisplay()
+    }
+}
+
+private final class OrbLayer: CALayer {
+    var model: OrbModel?
+    var ink = CGColor(gray: 0, alpha: 0)
+    var floor = 0.0
+    var still = true
+
+    override init() {
+        super.init()
+        isGeometryFlipped = true
+        needsDisplayOnBoundsChange = true
+    }
+
+    override init(layer: Any) { super.init(layer: layer) }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    override func action(forKey event: String) -> (any CAAction)? { nil }
+
+    override func draw(in context: CGContext) {
+        guard let model else { return }
+        let t = still ? 0 : Date.now.timeIntervalSince(OrbClock.epoch) * 1000
+        model.draw(t: t) { x, y, r, a in
+            context.setFillColor(ink.copy(alpha: floor + (1 - floor) * a) ?? ink)
+            context.fillEllipse(in: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r))
+        }
     }
 }
 
