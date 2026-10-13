@@ -286,6 +286,13 @@ private func timeline(_ path: String, _ format: TranscriptFormat) throws -> Sess
         #expect(t.status == .idle)
     }
 
+    @Test func taskUpdateIsNotABackgroundTask() throws {
+        var t = SessionTimeline()
+        t.apply(event(#"{"type":"user","toolUseResult":{"success":true,"taskId":"1","updatedFields":["status"]},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"Updated task #1 status"}]}}"#))
+        t.apply(.turnEnded)
+        #expect(t.status == .idle)
+    }
+
     @Test func asyncAgentCountsAsBackgroundTask() throws {
         var t = SessionTimeline()
         t.apply(event(#"{"type":"user","toolUseResult":{"isAsync":true,"status":"async_launched","agentId":"a1"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"launched"}]}}"#))

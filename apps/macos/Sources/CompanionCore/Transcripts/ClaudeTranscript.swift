@@ -41,7 +41,7 @@ public enum ClaudeTranscript {
 
     private static func backgroundEvents(_ result: [String: Any]) -> [TranscriptEvent] {
         if let id = TranscriptText.string(result["backgroundTaskId"]) { return [.backgroundStarted(.init(id: id, kind: .command))] }
-        if let id = TranscriptText.string(result["taskId"]), result["persistent"] as? Bool != true {
+        if let id = TranscriptText.string(result["taskId"]), result["persistent"] as? Bool == false {
             return [.backgroundStarted(.init(id: id, kind: .monitor))]
         }
         if result["isAsync"] as? Bool == true, let id = TranscriptText.string(result["agentId"]) {
