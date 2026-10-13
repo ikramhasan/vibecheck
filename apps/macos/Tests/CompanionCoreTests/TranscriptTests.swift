@@ -247,6 +247,67 @@ private func timeline(_ path: String, _ format: TranscriptFormat) throws -> Sess
     }
 }
 
+@Suite struct ClaudeBackgroundTaskTests {
+    private func event(_ json: String) -> [TranscriptEvent] {
+        ClaudeTranscript.events(from: Data(json.utf8))
+    }
+
+    private func notification(_ id: String, status: String = "completed") -> String {
+        #"{"type":"queue-operation","operation":"enqueue","content":"<task-notification>\n<task-id>\#(id)</task-id>\n<status>\#(status)</status>\n</task-notification>"}"#
+    }
+
+    @Test func endedTurnKeepsWorkingWhileBackgroundTasksRun() throws {
+        let t = try timeline("claude/waiting-on-background.jsonl", .claude)
+        #expect(t.status == .working)
+        #expect(t.activity == "Waiting on 1 command and 1 monitor")
+        #expect(t.lastReply == "I'll wait for the build.")
+    }
+
+    @Test func finishedTasksUpdateTheWait() throws {
+        var t = try timeline("claude/waiting-on-background.jsonl", .claude)
+        t.apply(event(notification("bwatch")))
+        #expect(t.activity == "Waiting on 1 command")
+        t.apply(event(notification("bbuild", status: "failed")))
+        #expect(t.status == .working)
+        #expect(t.activity == "Thinking…")
+    }
+
+    @Test func monitorEventsDoNotEndTheTask() throws {
+        var t = try timeline("claude/waiting-on-background.jsonl", .claude)
+        t.apply(event(#"{"type":"queue-operation","operation":"enqueue","content":"<task-notification>\n<task-id>bwatch</task-id>\n<summary>Monitor event</summary>\n</task-notification>"}"#))
+        #expect(t.activity == "Waiting on 1 command and 1 monitor")
+    }
+
+    @Test func stoppedTaskEndsTheWait() throws {
+        var t = SessionTimeline()
+        t.apply(event(#"{"type":"user","toolUseResult":{"backgroundTaskId":"b1"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}"#))
+        t.apply(event(#"{"type":"user","toolUseResult":{"task_id":"b1","task_type":"local_bash"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t2","content":"stopped"}]}}"#))
+        t.apply(.turnEnded)
+        #expect(t.status == .idle)
+    }
+
+    @Test func taskUpdateIsNotABackgroundTask() throws {
+        var t = SessionTimeline()
+        t.apply(event(#"{"type":"user","toolUseResult":{"success":true,"taskId":"1","updatedFields":["status"]},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"Updated task #1 status"}]}}"#))
+        t.apply(.turnEnded)
+        #expect(t.status == .idle)
+    }
+
+    @Test func asyncAgentCountsAsBackgroundTask() throws {
+        var t = SessionTimeline()
+        t.apply(event(#"{"type":"user","toolUseResult":{"isAsync":true,"status":"async_launched","agentId":"a1"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"launched"}]}}"#))
+        t.apply(.turnEnded)
+        #expect(t.activity == "Waiting on 1 agent")
+    }
+
+    @Test func interruptIsIdleEvenWithBackgroundTasks() throws {
+        var t = try timeline("claude/waiting-on-background.jsonl", .claude)
+        t.apply(.interrupted)
+        #expect(t.status == .idle)
+        #expect(t.wasInterrupted)
+    }
+}
+
 @Suite struct ClaudeNotificationTests {
     @Test func backgroundTaskNotificationWorksWithoutReplacingTask() throws {
         let t = try timeline("claude/background-task.jsonl", .claude)

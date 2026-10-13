@@ -13,6 +13,8 @@ public struct SessionTimeline: Equatable, Sendable {
     public private(set) var hasEvents = false
     private var titleIsGenerated = true
     private var pending: [ToolCall] = []
+    private var background: [BackgroundTask] = []
+    private var awaitingBackground = false
 
     static let claudeWindow = 1_000_000
     static let legacyClaudeWindow = 200_000
@@ -50,8 +52,19 @@ public struct SessionTimeline: Equatable, Sendable {
         case .toolResult(let id):
             pending.removeAll { $0.id == id }
             if pending.isEmpty { continueWorking(activity: "Thinking…") } else { showPending() }
+        case .backgroundStarted(let task):
+            background.removeAll { $0.id == task.id }
+            background.append(task)
+        case .backgroundEnded(let ids):
+            background.removeAll { ids.contains($0.id) }
+            guard awaitingBackground else { return }
+            if background.isEmpty { continueWorking(activity: "Thinking…") } else { activity = waitingActivity }
         case .turnEnded:
             settle(.idle)
+            guard !background.isEmpty else { return }
+            status = .working
+            activity = waitingActivity
+            awaitingBackground = true
         case .interrupted:
             settle(.idle)
             wasInterrupted = true
@@ -82,6 +95,7 @@ public struct SessionTimeline: Equatable, Sendable {
 
     private mutating func startWorking(activity: String) {
         pending = []
+        awaitingBackground = false
         wasInterrupted = false
         status = .working
         attention = nil
@@ -90,6 +104,7 @@ public struct SessionTimeline: Equatable, Sendable {
 
     private mutating func continueWorking(activity: String) {
         wasInterrupted = false
+        awaitingBackground = false
         guard pending.isEmpty else { return showPending() }
         status = .working
         attention = nil
@@ -98,6 +113,7 @@ public struct SessionTimeline: Equatable, Sendable {
 
     private mutating func settle(_ status: AgentSession.Status) {
         pending = []
+        awaitingBackground = false
         self.status = status
         attention = nil
         activity = nil
@@ -114,6 +130,16 @@ public struct SessionTimeline: Equatable, Sendable {
             status = .working
             attention = nil
         }
+    }
+
+    private var waitingActivity: String {
+        let counts: [(BackgroundTask.Kind, String)] = [(.command, "command"), (.monitor, "monitor"), (.agent, "agent")]
+        let parts = counts.compactMap { kind, noun -> String? in
+            let count = background.filter { $0.kind == kind }.count
+            return count == 0 ? nil : "\(count) \(noun)\(count == 1 ? "" : "s")"
+        }
+        let list = parts.count > 1 ? parts.dropLast().joined(separator: ", ") + " and " + parts[parts.count - 1] : parts.joined()
+        return "Waiting on \(list)"
     }
 
     static func describe(_ call: ToolCall) -> String {

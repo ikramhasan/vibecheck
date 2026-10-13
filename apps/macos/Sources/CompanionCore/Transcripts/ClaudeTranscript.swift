@@ -11,6 +11,7 @@ public enum ClaudeTranscript {
         case "custom-title": return TranscriptText.string(entry["customTitle"]).map { [.title($0, generated: false)] } ?? []
         case "ai-title": return TranscriptText.string(entry["aiTitle"]).map { [.title($0, generated: true)] } ?? []
         case "last-prompt": return TranscriptText.string(entry["lastPrompt"]).map { [.latestPrompt($0)] } ?? []
+        case "queue-operation": return entry["operation"] as? String == "enqueue" ? notificationEvents(entry["content"] as? String ?? "") : []
         default: return []
         }
     }
@@ -20,20 +21,42 @@ public enum ClaudeTranscript {
         guard entry["isMeta"] as? Bool != true, let message = entry["message"] as? [String: Any] else { return [] }
         let origin = (entry["origin"] as? [String: Any])?["kind"] as? String
         let fromUser = origin == nil || origin == "human"
-        if let text = message["content"] as? String { return promptEvents(text, fromUser: fromUser) }
+        if let text = message["content"] as? String { return notificationEvents(text) + promptEvents(text, fromUser: fromUser) }
         guard let blocks = message["content"] as? [[String: Any]] else { return [] }
         var events: [TranscriptEvent] = []
         for block in blocks {
             switch block["type"] as? String {
             case "tool_result":
                 if let id = TranscriptText.string(block["tool_use_id"]) { events.append(.toolResult(id: id)) }
+                events += backgroundEvents(entry["toolUseResult"] as? [String: Any] ?? [:])
             case "text":
-                events += promptEvents(block["text"] as? String ?? "", fromUser: fromUser)
+                let text = block["text"] as? String ?? ""
+                events += notificationEvents(text) + promptEvents(text, fromUser: fromUser)
             default:
                 break
             }
         }
         return events
+    }
+
+    private static func backgroundEvents(_ result: [String: Any]) -> [TranscriptEvent] {
+        if let id = TranscriptText.string(result["backgroundTaskId"]) { return [.backgroundStarted(.init(id: id, kind: .command))] }
+        if let id = TranscriptText.string(result["taskId"]), result["persistent"] as? Bool == false {
+            return [.backgroundStarted(.init(id: id, kind: .monitor))]
+        }
+        if result["isAsync"] as? Bool == true, let id = TranscriptText.string(result["agentId"]) {
+            return [.backgroundStarted(.init(id: id, kind: .agent))]
+        }
+        if let id = TranscriptText.string(result["task_id"]) { return [.backgroundEnded(ids: [id])] }
+        return []
+    }
+
+    private static func notificationEvents(_ text: String) -> [TranscriptEvent] {
+        guard text.contains("<task-notification>"), tag("status", in: text) != nil else { return [] }
+        let ids = text.components(separatedBy: "<task-id>").dropFirst().compactMap { part in
+            part.components(separatedBy: "</task-id>").first.flatMap(TranscriptText.string)
+        }
+        return ids.isEmpty ? [] : [.backgroundEnded(ids: ids)]
     }
 
     private static func promptEvents(_ text: String, fromUser: Bool) -> [TranscriptEvent] {
