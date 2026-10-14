@@ -126,6 +126,7 @@ struct EdgePanelView: View {
                              onBack: onCloseSettings)
                     .frame(height: PanelMetrics.settingsHeight)
                     .environment(\.orbsOnScreen, expanded && onSettings)
+                    .environment(\.orbMaxFPS, 30)
                     .allowsHitTesting(onSettings)
                     .accessibilityHidden(!onSettings)
             }

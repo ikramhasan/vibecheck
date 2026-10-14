@@ -594,10 +594,11 @@ private struct LoaderPreview: View {
     let style: LoaderStyle
     let size: CGFloat
     let color: Color
+    @Environment(\.orbsOnScreen) private var onScreen
 
     var body: some View {
         if style == .random {
-            TimelineView(.periodic(from: .now, by: 2.5)) { context in
+            TimelineView(.animation(minimumInterval: 2.5, paused: !onScreen)) { context in
                 let step = Int(context.date.timeIntervalSinceReferenceDate / 2.5)
                 Orb(look: OrbLook(LoaderStyle.animations[step % LoaderStyle.animations.count], seed: ""),
                     size: size, color: color)

@@ -59,6 +59,7 @@ struct Orb: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.orbsOnScreen) private var onScreen
+    @Environment(\.orbMaxFPS) private var maxFPS
 
     var body: some View {
         let light = colorScheme == .light
@@ -69,7 +70,7 @@ struct Orb: View {
                              playing: onScreen)
         Group {
             switch OrbRendering.shared.renderer {
-            case .ticker: OrbTickerCanvas(style: style, fps: OrbRendering.shared.tickerFPS)
+            case .ticker: OrbTickerCanvas(style: style, fps: min(OrbRendering.shared.tickerFPS, maxFPS))
             case .swiftUI: OrbTimelineCanvas(style: style)
             case .layer: OrbLayerCanvas(style: style)
             case .sprite: OrbSpriteCanvas(style: style)
@@ -94,6 +95,7 @@ struct OrbStyle: Equatable {
 
 extension EnvironmentValues {
     @Entry var orbsOnScreen = true
+    @Entry var orbMaxFPS = Double.infinity
 }
 
 enum OrbClock {
