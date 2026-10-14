@@ -315,7 +315,9 @@ final class EdgePanelController {
     private func sessionsChanged(_ sessions: [AgentSession]) {
         contentChanged()
         let hadPending = presentation.pendingAttention
-        state.completed.forgetResumed(sessions)
+        var completed = state.completed
+        completed.forgetResumed(sessions)
+        if completed != state.completed { state.completed = completed }
         presentation.update(sessions: sessions, previewCount: state.completed.visible(sessions).count)
         let newlyNeedsAttention = !presentation.pendingAttention.subtracting(hadPending).isEmpty
         apply(attentionArrived: newlyNeedsAttention)

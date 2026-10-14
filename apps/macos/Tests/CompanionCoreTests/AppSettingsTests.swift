@@ -22,8 +22,24 @@ import Testing
     @Test func unknownStylesAreDroppedNotFatal() throws {
         let json = #"{"global":"nope","perAgent":{"pi":"gyro","claude":"gone"}}"#
         let s = try JSONDecoder().decode(LoaderSettings.self, from: Data(json.utf8))
-        #expect(s.global == .working)
+        #expect(s.global == .random)
         #expect(s.perAgent == ["pi": .gyro])
+    }
+
+    @Test func randomIsTheDefault() {
+        #expect(LoaderSettings().global == .random)
+    }
+
+    @Test func randomResolvesToAStableAnimationPerSeed() {
+        let first = LoaderStyle.random.resolved(seed: "claude/abc")
+        #expect(first != .random)
+        #expect(LoaderStyle.random.resolved(seed: "claude/abc") == first)
+        let seeds = (0..<200).map { "claude/session-\($0)" }
+        #expect(Set(seeds.map { LoaderStyle.random.resolved(seed: $0) }) == Set(LoaderStyle.animations))
+    }
+
+    @Test func fixedStylesIgnoreTheSeed() {
+        #expect(LoaderStyle.gyro.resolved(seed: "anything") == .gyro)
     }
 }
 

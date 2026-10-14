@@ -219,7 +219,7 @@ public struct SessionGroup: Identifiable, Hashable, Sendable {
         for s in sessions {
             let p = s.host.map { host in
                 let root = s.remoteCheckout ?? s.cwd
-                return ProjectInfo(root: "\(host):\(root)", name: URL(fileURLWithPath: root).lastPathComponent, host: host)
+                return ProjectInfo(root: "\(host):\(root)", name: (root as NSString).lastPathComponent, host: host)
             } ?? project(s.cwd)
             if groups[p.root] == nil { order.append(p.root); groups[p.root] = SessionGroup(project: p, sessions: []) }
             groups[p.root]!.sessions.append(s)

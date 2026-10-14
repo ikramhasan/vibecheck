@@ -126,6 +126,7 @@ struct EdgePanelView: View {
                              onBack: onCloseSettings)
                     .frame(height: PanelMetrics.settingsHeight)
                     .environment(\.orbsOnScreen, expanded && onSettings)
+                    .environment(\.orbMaxFPS, 30)
                     .allowsHitTesting(onSettings)
                     .accessibilityHidden(!onSettings)
             }
@@ -307,7 +308,7 @@ struct StatusIndicator: View {
 
     private func look(_ orb: StatusPresentation.Orb) -> OrbLook {
         switch orb {
-        case .working: OrbLook(settings.loader.style(for: session.agent.id))
+        case .working: OrbLook(settings.loader.style(for: session.agent.id), seed: session.id)
         case .waiting: .waiting
         case .retrying: .retrying
         case .resting: .base

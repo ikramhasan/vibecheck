@@ -4,6 +4,7 @@ import Observation
 /// Which thinking orb shows while an agent is working. The rendering lives in the app
 /// target's `Orbs/`; Core only knows the catalog so settings can be persisted and tested.
 public enum LoaderStyle: String, CaseIterable, Codable, Sendable {
+    case random
     case working
     case gyro
     case reasoning
@@ -14,6 +15,14 @@ public enum LoaderStyle: String, CaseIterable, Codable, Sendable {
     case spiral
 
     public var displayName: String { rawValue.capitalized }
+
+    public static let animations = allCases.filter { $0 != .random }
+
+    public func resolved(seed: String) -> LoaderStyle {
+        guard self == .random else { return self }
+        let hash = seed.utf8.reduce(UInt64(14695981039346656037)) { ($0 ^ UInt64($1)) &* 1099511628211 }
+        return Self.animations[Int(hash % UInt64(Self.animations.count))]
+    }
 }
 
 /// Which loader to show: one global style, optionally overridden per agent id.
@@ -22,7 +31,7 @@ public struct LoaderSettings: Equatable, Sendable {
     /// Agent id ("pi", "claude", …) → style. Absent means "use global".
     public var perAgent: [String: LoaderStyle]
 
-    public init(global: LoaderStyle = .working, perAgent: [String: LoaderStyle] = [:]) {
+    public init(global: LoaderStyle = .random, perAgent: [String: LoaderStyle] = [:]) {
         self.global = global
         self.perAgent = perAgent
     }
@@ -44,7 +53,7 @@ extension LoaderSettings: Codable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let global = (try? c.decode(String.self, forKey: .global)).flatMap(LoaderStyle.init(rawValue:))
         let raw = (try? c.decode([String: String].self, forKey: .perAgent)) ?? [:]
-        self.init(global: global ?? .working, perAgent: raw.compactMapValues(LoaderStyle.init(rawValue:)))
+        self.init(global: global ?? .random, perAgent: raw.compactMapValues(LoaderStyle.init(rawValue:)))
     }
 
     public func encode(to encoder: Encoder) throws {

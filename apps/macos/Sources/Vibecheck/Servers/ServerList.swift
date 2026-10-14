@@ -182,7 +182,7 @@ private struct ServerRow: View {
 
     private var projectLabel: String {
         guard let cwd = server.cwd else { return server.framework == .docker ? "Container" : "Unknown folder" }
-        if let remote = server.remote { return "\(URL(fileURLWithPath: cwd).lastPathComponent) · \(remote.host)" }
+        if let remote = server.remote { return "\((cwd as NSString).lastPathComponent) · \(remote.host)" }
         let project = ProjectIcons.shared.project(for: cwd)
         guard cwd.hasPrefix(project.root + "/") else { return project.name }
         return project.name + cwd.dropFirst(project.root.count)
