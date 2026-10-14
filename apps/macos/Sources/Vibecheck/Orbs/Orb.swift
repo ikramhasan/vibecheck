@@ -4,12 +4,12 @@
 import CompanionCore
 import SwiftUI
 
-enum OrbLook: Equatable {
+enum OrbLook: Hashable {
     case base, working, gyro, reasoning, twins, searching, lighthouse, background, spiral, retrying, waiting
 
-    init(_ style: LoaderStyle) {
-        switch style {
-        case .working: self = .working
+    init(_ style: LoaderStyle, seed: String) {
+        switch style.resolved(seed: seed) {
+        case .working, .random: self = .working
         case .gyro: self = .gyro
         case .reasoning: self = .reasoning
         case .twins: self = .twins
@@ -22,13 +22,27 @@ enum OrbLook: Equatable {
 
     fileprivate var period: Double {
         switch self {
-        case .working, .gyro: 3000
+        case .working: 3400
+        case .gyro: 3000
         case .base, .reasoning, .twins: 6500
-        case .searching, .lighthouse, .background, .spiral, .retrying, .waiting: 13000
+        case .waiting: 12000
+        case .searching, .lighthouse, .background, .spiral, .retrying: 13000
         }
     }
 
-    fileprivate var walkers: Int {
+    var loop: Double {
+        switch self {
+        case .base: 0
+        case .working: 3400
+        case .gyro: 6000
+        case .reasoning, .twins: 6500
+        case .waiting: 12000
+        case .searching, .lighthouse, .background, .spiral: 13000
+        case .retrying: 16000
+        }
+    }
+
+    var walkers: Int {
         switch self {
         case .reasoning: 1
         case .twins: 2
@@ -48,137 +62,42 @@ struct Orb: View {
 
     var body: some View {
         let light = colorScheme == .light
-        OrbCanvas(look: look, size: Double(size),
-                  ink: NSColor(light ? color.mix(with: .black, by: 0.25) : color),
-                  floor: light ? 0.35 : 0.2,
-                  still: !animated || reduceMotion,
-                  playing: onScreen)
-            .frame(width: size, height: size)
-            .accessibilityHidden(true)
+        let style = OrbStyle(look: look, size: Double(size),
+                             ink: light ? color.mix(with: .black, by: 0.25) : color,
+                             floor: light ? 0.35 : 0.2,
+                             still: !animated || reduceMotion,
+                             playing: onScreen)
+        Group {
+            switch OrbRendering.shared.renderer {
+            case .ticker: OrbTickerCanvas(style: style, fps: OrbRendering.shared.tickerFPS)
+            case .swiftUI: OrbTimelineCanvas(style: style)
+            case .layer: OrbLayerCanvas(style: style)
+            case .sprite: OrbSpriteCanvas(style: style)
+            case .apng: OrbAPNGCanvas(style: style)
+            case .still: OrbSpriteCanvas(style: OrbStyle(look: look, size: Double(size), ink: style.ink, floor: style.floor,
+                                                         still: true, playing: false))
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
     }
+}
+
+struct OrbStyle: Equatable {
+    let look: OrbLook
+    let size: Double
+    let ink: Color
+    let floor: Double
+    let still: Bool
+    let playing: Bool
 }
 
 extension EnvironmentValues {
     @Entry var orbsOnScreen = true
 }
 
-private enum OrbClock {
+enum OrbClock {
     static let epoch = Date.now
-}
-
-private struct OrbCanvas: NSViewRepresentable {
-    let look: OrbLook
-    let size: Double
-    let ink: NSColor
-    let floor: Double
-    let still: Bool
-    let playing: Bool
-
-    func makeNSView(context: Context) -> OrbView { OrbView() }
-
-    func updateNSView(_ view: OrbView, context: Context) {
-        view.show(look: look, size: size, ink: ink, floor: floor, still: still, playing: playing)
-    }
-}
-
-private final class OrbView: NSView {
-    private let orb = OrbLayer()
-    private var ink = NSColor.clear
-    private var playing = false
-    private var displayLink: CADisplayLink?
-
-    override init(frame: NSRect) {
-        super.init(frame: frame)
-        wantsLayer = true
-        layer?.addSublayer(orb)
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
-
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
-
-    func show(look: OrbLook, size: Double, ink: NSColor, floor: Double, still: Bool, playing: Bool) {
-        if orb.model?.look != look || orb.model?.size != size {
-            orb.model = OrbModel(look: look, size: size)
-        }
-        self.ink = ink
-        self.playing = playing
-        orb.floor = floor
-        orb.still = still
-        resolveInk()
-        updateDisplayLink()
-    }
-
-    override func layout() {
-        super.layout()
-        orb.frame = bounds
-    }
-
-    override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-        resolveInk()
-    }
-
-    override func viewDidChangeBackingProperties() {
-        super.viewDidChangeBackingProperties()
-        orb.contentsScale = window?.backingScaleFactor ?? 2
-        orb.setNeedsDisplay()
-    }
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        updateDisplayLink()
-    }
-
-    private func resolveInk() {
-        effectiveAppearance.performAsCurrentDrawingAppearance { orb.ink = ink.cgColor }
-        orb.setNeedsDisplay()
-    }
-
-    private func updateDisplayLink() {
-        let running = window != nil && playing && !orb.still
-        if running, displayLink == nil {
-            let link = displayLink(target: self, selector: #selector(nextFrame))
-            link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
-            link.add(to: .main, forMode: .common)
-            displayLink = link
-        } else if !running, let link = displayLink {
-            link.invalidate()
-            displayLink = nil
-        }
-    }
-
-    @objc private func nextFrame() {
-        orb.setNeedsDisplay()
-    }
-}
-
-private final class OrbLayer: CALayer {
-    var model: OrbModel?
-    var ink = CGColor(gray: 0, alpha: 0)
-    var floor = 0.0
-    var still = true
-
-    override init() {
-        super.init()
-        isGeometryFlipped = true
-        needsDisplayOnBoundsChange = true
-    }
-
-    override init(layer: Any) { super.init(layer: layer) }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
-
-    override func action(forKey event: String) -> (any CAAction)? { nil }
-
-    override func draw(in context: CGContext) {
-        guard let model else { return }
-        let t = still ? 0 : Date.now.timeIntervalSince(OrbClock.epoch) * 1000
-        model.draw(t: t) { x, y, r, a in
-            context.setFillColor(ink.copy(alpha: floor + (1 - floor) * a) ?? ink)
-            context.fillEllipse(in: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r))
-        }
-    }
 }
 
 private let tau = Double.pi * 2
@@ -200,8 +119,8 @@ private let ringAxis: SIMD3<Double> = {
 }()
 private let twist = 1.4
 private let lean = radians(30), trail = Double.pi / 2
-private let lensMs = 1800.0, lensMove = 0.4, lensRadius = 0.6
-private let hop = 220.0, tail = 5, reach = 24, walkLength = 16
+private let lensMs = 13000.0 / 7, lensSpots = 7.0, lensMove = 0.4, lensRadius = 0.6
+private let hop = 6500.0 / 30, tail = 5, reach = 24, walkLength = 16
 
 private func spring(_ x: Double) -> Double {
     1 - exp(-4.5 * x) * cos(3 * .pi * x) - x * exp(-4.5)
@@ -209,7 +128,7 @@ private func spring(_ x: Double) -> Double {
 
 private func rewind(_ t: Double, _ w: Double) -> Double {
     let p = 3200.0, k = floor(t / p), u = t - k * p
-    let back = 0.6 * 2100 * w
+    let back = 1300 * w
     let forward = (2000 + 100 + 100) * w
     let a: Double
     if u < 2000 {
@@ -234,7 +153,7 @@ private func spot(_ k: Double) -> SIMD3<Double> {
 private func lens(at t: Double) -> SIMD3<Double> {
     let k = floor(t / lensMs), u = t / lensMs - k
     let e = u < lensMove ? (1 - cos(u / lensMove * .pi)) / 2 : 1
-    let a = spot(k), b = spot(k + 1)
+    let a = spot(k.truncatingRemainder(dividingBy: lensSpots)), b = spot((k + 1).truncatingRemainder(dividingBy: lensSpots))
     let v = a + (b - a) * e
     return v / (v * v).sum().squareRoot()
 }
@@ -278,7 +197,7 @@ private func fibonacciSphere(_ count: Int) -> [SIMD3<Double>] {
     }
 }
 
-private final class OrbModel {
+final class OrbModel {
     let look: OrbLook
     let size: Double
     private let points: [SIMD3<Double>]
@@ -307,10 +226,10 @@ private final class OrbModel {
         }
     }
 
-    func draw(t: Double, dot: (Double, Double, Double, Double) -> Void) {
+    func draw(t: Double, dot: (Int, Double, Double, Double, Double) -> Void) {
         let c = size / 2, radius = c * 0.8
         let yaw = yaw(t)
-        let gyro: Double? = look == .gyro ? t / 5000 * tau : nil
+        let gyro: Double? = look == .gyro ? t / 6000 * tau : nil
         let pitch = radians(20 + (gyro.map { 10 * cos($0) } ?? 0))
         let roll = gyro.map { radians(12 * sin($0)) } ?? 0, sr = sin(roll), cr = cos(roll)
         let sy = sin(yaw), cy = cos(yaw), st = sin(pitch), ct = cos(pitch)
@@ -325,7 +244,7 @@ private final class OrbModel {
         func headLat(_ tt: Double) -> Double { radians(70) * (1 - 2 * (tt.truncatingRemainder(dividingBy: 6000) / 6000)) }
         let glow = min(1, 3 * sin(.pi * (t.truncatingRemainder(dividingBy: 6000) / 6000)))
         let lensCentre = look == .searching ? lens(at: t) : nil
-        let tw = look == .gyro ? 0.5 * sin(t / 2600 * tau) : 0
+        let tw = look == .gyro ? 0.5 * sin(t / 3000 * tau) : 0
 
         for (i, p) in points.enumerated() {
             let (x, y, z) = (p.x, p.y, p.z)
@@ -367,7 +286,7 @@ private final class OrbModel {
                 a *= 0.5
                 let across = vx * cos(lean) - vy * sin(lean)
                 let toward = -st * (vx * sin(lean) + vy * cos(lean)) + ct * vz
-                let off = atan2(across, toward) - ((t / 2500).truncatingRemainder(dividingBy: 1) * tau - .pi)
+                let off = atan2(across, toward) - ((t / 2600).truncatingRemainder(dividingBy: 1) * tau - .pi)
                 let dphi = ((off + .pi).truncatingRemainder(dividingBy: tau) + tau).truncatingRemainder(dividingBy: tau) - .pi
                 let beam = dphi < 0 ? max(0, 1 + dphi / trail) : exp(-pow(dphi / 0.45, 2))
                 let g = beam * (0.25 + 0.75 * min(1, max(0, (d - 0.4) / 0.3)))
@@ -393,7 +312,7 @@ private final class OrbModel {
                 r *= 1 + 1.1 * w
             }
             if roll != 0 { (vx, vy) = (vx * cr - vy * sr, vx * sr + vy * cr) }
-            if a >= 0.005 { dot(c + vx * radius, c - vy * radius, max(0.45, r), min(1, a)) }
+            dot(i, c + vx * radius, c - vy * radius, max(0.45, r), a < 0.005 ? 0 : min(1, a))
         }
     }
 

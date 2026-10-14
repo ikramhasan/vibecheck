@@ -567,7 +567,7 @@ private struct LoaderTile: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 0) {
-                Orb(look: OrbLook(style), size: 34, color: selected ? .white : StatusPresentation.Tint.accent.color)
+                LoaderPreview(style: style, size: 34, color: selected ? .white : StatusPresentation.Tint.accent.color)
                     .padding(.top, 4)
                     .environment(\.colorScheme, selected ? .dark : colorScheme)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -590,6 +590,24 @@ private struct LoaderTile: View {
     }
 }
 
+private struct LoaderPreview: View {
+    let style: LoaderStyle
+    let size: CGFloat
+    let color: Color
+
+    var body: some View {
+        if style == .random {
+            TimelineView(.periodic(from: .now, by: 2.5)) { context in
+                let step = Int(context.date.timeIntervalSinceReferenceDate / 2.5)
+                Orb(look: OrbLook(LoaderStyle.animations[step % LoaderStyle.animations.count], seed: ""),
+                    size: size, color: color)
+            }
+        } else {
+            Orb(look: OrbLook(style, seed: ""), size: size, color: color)
+        }
+    }
+}
+
 private struct AgentLoaderRow: View {
     let agent: AgentSession.AgentInfo
     @Bindable var settings: AppSettings
@@ -607,7 +625,7 @@ private struct AgentLoaderRow: View {
                 .foregroundStyle(.primary)
                 .lineLimit(1)
             Spacer(minLength: 6)
-            Orb(look: OrbLook(settings.loader.style(for: agent.id)), size: 18, color: StatusPresentation.Tint.accent.color)
+            LoaderPreview(style: settings.loader.style(for: agent.id), size: 18, color: StatusPresentation.Tint.accent.color)
             Picker("Loader for \(agent.name)", selection: choice) {
                 Text("Global (\(settings.loader.global.displayName))").tag(LoaderStyle?.none)
                 Divider()
