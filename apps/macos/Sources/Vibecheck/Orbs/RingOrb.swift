@@ -58,18 +58,23 @@ final class RingOrbView: OrbHostView, OrbTickable {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         let side = min(bounds.width, bounds.height)
-        let box = CGRect(x: bounds.midX - side / 2, y: bounds.midY - side / 2, width: side, height: side)
+        let box = CGRect(x: 0, y: 0, width: side, height: side)
         let line = max(1.5, side / 15.5)
         let radius = side / 2 - line / 2
         let centre = CGPoint(x: side / 2, y: side / 2)
 
+        for ring in [halo, arc, lead, trail] {
+            ring.bounds = box
+        }
+        for ring in [halo, arc] {
+            ring.position = CGPoint(x: bounds.midX, y: bounds.midY)
+        }
+        for ring in [lead, trail] {
+            ring.position = centre
+        }
         for ring in [halo, lead, trail] {
-            ring.frame = box
             ring.lineWidth = line
         }
-        arc.frame = box
-        lead.frame = arc.bounds
-        trail.frame = arc.bounds
         halo.path = CGPath(ellipseIn: CGRect(x: line / 2, y: line / 2, width: 2 * radius, height: 2 * radius), transform: nil)
         lead.path = Self.quarter(centre: centre, radius: radius, from: .pi / 4)
         trail.path = Self.quarter(centre: centre, radius: radius, from: -.pi / 4)
