@@ -25,6 +25,19 @@ public enum LoaderStyle: String, CaseIterable, Codable, Sendable {
     }
 }
 
+/// How status orbs are drawn: the dot-sphere thinking orbs, or solid ring orbs for every status.
+public enum OrbFamily: String, CaseIterable, Codable, Sendable {
+    case thinking
+    case ring
+
+    public var displayName: String {
+        switch self {
+        case .thinking: "Thinking"
+        case .ring: "Ring"
+        }
+    }
+}
+
 /// Which loader to show: one global style, optionally overridden per agent id.
 public struct LoaderSettings: Equatable, Sendable {
     public var global: LoaderStyle
@@ -160,6 +173,10 @@ public final class AppSettings {
         didSet { if loader != oldValue { save(loader, key: Keys.loader) } }
     }
 
+    public var orbFamily: OrbFamily {
+        didSet { if orbFamily != oldValue { defaults.set(orbFamily.rawValue, forKey: Keys.orbFamily) } }
+    }
+
     public var agents: AgentPreferences {
         didSet { if agents != oldValue { save(agents, key: Keys.agents) } }
     }
@@ -181,6 +198,7 @@ public final class AppSettings {
 
     private enum Keys {
         static let loader = "settings.loader"
+        static let orbFamily = "settings.orbFamily"
         static let agents = "settings.agents"
         static let finishedSessionRemoval = "settings.finishedSessionRemoval"
         static let sounds = "settings.sounds"
@@ -190,6 +208,7 @@ public final class AppSettings {
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         loader = Self.load(LoaderSettings.self, key: Keys.loader, from: defaults) ?? LoaderSettings()
+        orbFamily = defaults.string(forKey: Keys.orbFamily).flatMap(OrbFamily.init(rawValue:)) ?? .thinking
         agents = Self.load(AgentPreferences.self, key: Keys.agents, from: defaults) ?? AgentPreferences()
         finishedSessionRemoval = defaults.string(forKey: Keys.finishedSessionRemoval)
             .flatMap(FinishedSessionRemoval.init(rawValue:)) ?? .default

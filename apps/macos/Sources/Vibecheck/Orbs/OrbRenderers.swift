@@ -502,7 +502,7 @@ struct OrbTickerCanvas: NSViewRepresentable {
     }
 }
 
-final class OrbTickerView: OrbHostView {
+final class OrbTickerView: OrbHostView, OrbTickable {
     private let frames = CALayer()
     var fps = 60.0
     private var sprite: OrbSprite?
@@ -548,6 +548,11 @@ final class OrbTickerView: OrbHostView {
 }
 
 @MainActor
+protocol OrbTickable: AnyObject {
+    func advance(to elapsed: Double)
+}
+
+@MainActor
 final class OrbTicker {
     static let shared = OrbTicker()
 
@@ -556,15 +561,15 @@ final class OrbTicker {
     private var fps = 0.0
 
     private struct WeakView {
-        weak var view: OrbTickerView?
+        weak var view: (any OrbTickable)?
     }
 
-    func add(_ view: OrbTickerView) {
+    func add(_ view: any OrbTickable) {
         views[ObjectIdentifier(view)] = WeakView(view: view)
         schedule()
     }
 
-    func remove(_ view: OrbTickerView) {
+    func remove(_ view: any OrbTickable) {
         views[ObjectIdentifier(view)] = nil
         schedule()
     }

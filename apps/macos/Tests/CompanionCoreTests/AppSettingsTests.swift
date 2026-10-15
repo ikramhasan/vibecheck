@@ -59,4 +59,25 @@ import Testing
         #expect(second.loader.global == .gyro)
         #expect(second.loader.style(for: "claude") == .spiral)
     }
+
+    @Test func orbFamilyDefaultsToThinkingAndPersists() throws {
+        let suite = "AppSettingsTests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let first = AppSettings(defaults: defaults)
+        #expect(first.orbFamily == .thinking)
+        first.orbFamily = .ring
+
+        #expect(AppSettings(defaults: defaults).orbFamily == .ring)
+    }
+
+    @Test func unknownOrbFamilyFallsBackToThinking() throws {
+        let suite = "AppSettingsTests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        defaults.set("gone", forKey: "settings.orbFamily")
+        #expect(AppSettings(defaults: defaults).orbFamily == .thinking)
+    }
 }

@@ -72,13 +72,16 @@ struct SettingsPage: View {
                     .cascade(shown: isShown, index: 5, side: .trailing, paced: paced)
 
                     SettingsSection("Loading indicator",
-                                    footer: "Shown while an agent is working. Agents without an override use this.",
+                                    footer: settings.orbFamily == .ring
+                                        ? "Ring orbs show every status: working, waiting for you, your turn, "
+                                            + "blocked, failed and interrupted."
+                                        : "Shown while an agent is working. Agents without an override use this.",
                                     grouped: false) {
-                        LoaderGallery(selection: $settings.loader.global)
+                        IndicatorPicker(settings: settings)
                     }
                     .cascade(shown: isShown, index: 6, side: .trailing, paced: paced)
 
-                    if !agents.isEmpty {
+                    if !agents.isEmpty && settings.orbFamily == .thinking {
                         SettingsSection("Per agent") {
                             VStack(spacing: 0) {
                                 ForEach(Array(agents.enumerated()), id: \.element.id) { index, agent in
@@ -541,9 +544,111 @@ private struct UpdatesList: View {
 
 // MARK: - Loaders
 
+/// Thinking and Ring tabs. Picking a thinking style or the ring set makes it the orb family.
+private struct IndicatorPicker: View {
+    let settings: AppSettings
+    @State private var tab: OrbFamily
+
+    init(settings: AppSettings) {
+        self.settings = settings
+        _tab = State(initialValue: settings.orbFamily)
+    }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Picker("Orb style", selection: $tab) {
+                ForEach(OrbFamily.allCases, id: \.self) { Text($0.displayName).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .controlSize(.small)
+
+            switch tab {
+            case .thinking:
+                LoaderGallery(selection: thinkingSelection)
+                    .environment(\.orbFamily, .thinking)
+            case .ring:
+                RingOrbCard(selected: settings.orbFamily == .ring) {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { settings.orbFamily = .ring }
+                }
+                .environment(\.orbFamily, .ring)
+            }
+        }
+    }
+
+    private var thinkingSelection: Binding<LoaderStyle?> {
+        Binding(
+            get: { settings.orbFamily == .thinking ? settings.loader.global : nil },
+            set: { style in
+                settings.orbFamily = .thinking
+                if let style { settings.loader.global = style }
+            }
+        )
+    }
+}
+
+/// Every status drawn as a ring orb; click to use the set.
+private struct RingOrbCard: View {
+    let selected: Bool
+    let action: () -> Void
+
+    private struct Sample {
+        let name: String
+        let look: OrbLook
+        let tint: StatusPresentation.Tint
+    }
+
+    private static var samples: [Sample] {
+        [
+            Sample(name: "Working", look: .working, tint: .accent),
+            Sample(name: "Waiting", look: .waiting, tint: .attention),
+            Sample(name: "Your turn", look: .base, tint: .success),
+            Sample(name: "Blocked", look: .retrying, tint: .limited),
+            Sample(name: "Failed", look: .base, tint: .failure),
+            Sample(name: "Interrupted", look: .base, tint: .muted),
+        ]
+    }
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Ring orbs")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 13))
+                        .foregroundStyle(selected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.tertiary))
+                }
+                HStack(spacing: 0) {
+                    ForEach(Self.samples, id: \.name) { sample in
+                        VStack(spacing: 6) {
+                            Orb(look: sample.look, size: 26, color: sample.tint.color, animated: sample.look != .base)
+                            Text(sample.name)
+                                .font(.system(size: 9.5, weight: .medium))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+            .padding(12)
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .glassEffect(selected ? .regular.tint(.accentColor.opacity(0.25)).interactive() : .regular.interactive(),
+                     in: .rect(cornerRadius: 14, style: .continuous))
+        .accessibilityLabel("Ring orbs")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
 /// Tile grid of every working orb; click to choose.
 private struct LoaderGallery: View {
-    @Binding var selection: LoaderStyle
+    @Binding var selection: LoaderStyle?
 
     var body: some View {
         GlassEffectContainer(spacing: 0) {
