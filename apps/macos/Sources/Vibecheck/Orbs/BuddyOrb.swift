@@ -66,6 +66,7 @@ final class BuddyOrbView: OrbHostView, OrbTickable {
 
     override init(frame: NSRect) {
         super.init(frame: frame)
+        head.fillRule = .evenOdd
         zee.fillColor = nil
         zee.lineCap = .round
         zee.lineJoin = .round
@@ -143,15 +144,14 @@ final class BuddyOrbView: OrbHostView, OrbTickable {
 
         let shape = CGMutablePath()
         shape.addPath(Self.headShape, transform: pose)
-        let eyes = CGMutablePath()
         for x in Self.eyeXs {
             let eye = CGAffineTransform(scaleX: 1, y: expression.blink)
                 .concatenating(CGAffineTransform(translationX: x + expression.lookX * Self.lookRange.width,
                                                  y: Self.eyeY + expression.lookY * Self.lookRange.height))
                 .concatenating(pose)
-            eyes.addPath(Self.eyeShapes[expression.eyes.rawValue], transform: eye)
+            shape.addPath(Self.eyeShapes[expression.eyes.rawValue], transform: eye)
         }
-        head.path = shape.subtracting(eyes)
+        head.path = shape
         head.fillColor = color
         head.opacity = Float(expression.opacity)
 
@@ -209,6 +209,7 @@ final class BuddyOrbView: OrbHostView, OrbTickable {
         var down = CGAffineTransform(scaleX: 1 / detail, y: 1 / detail)
         let outline = path.copy(using: &up)?
             .copy(strokingWithWidth: 0.075 * detail, lineCap: .round, lineJoin: .round, miterLimit: 10)
+            .normalized()
         return outline?.copy(using: &down) ?? path
     }
 

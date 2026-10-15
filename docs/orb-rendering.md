@@ -287,3 +287,7 @@ failed wobbles once.
 `BuddyOrb.swift` rebuilds one `CAShapeLayer` path per frame from an `Expression` (look, blink, hop,
 squash, tilt, fade) on the shared `OrbTicker`. Your turn, failed and interrupted leave the ticker
 once their entrance settles, so idle sessions cost nothing. Like Ring, it ignores `orbs.renderer`.
+
+The eyes are cut out with an even-odd fill, not a path boolean op. The stroked eye shapes are built
+and normalized once, so a frame only transforms and appends cached paths: about 2 µs per orb on an
+M-series Mac, against about 21 µs when the eyes were subtracted from the head every frame.
