@@ -60,6 +60,7 @@ struct Orb: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.orbsOnScreen) private var onScreen
     @Environment(\.orbMaxFPS) private var maxFPS
+    @Environment(\.orbFamily) private var family
 
     var body: some View {
         let light = colorScheme == .light
@@ -69,14 +70,18 @@ struct Orb: View {
                              still: !animated || reduceMotion,
                              playing: onScreen)
         Group {
-            switch OrbRendering.shared.renderer {
-            case .ticker: OrbTickerCanvas(style: style, fps: min(OrbRendering.shared.tickerFPS, maxFPS))
-            case .swiftUI: OrbTimelineCanvas(style: style)
-            case .layer: OrbLayerCanvas(style: style)
-            case .sprite: OrbSpriteCanvas(style: style)
-            case .apng: OrbAPNGCanvas(style: style)
-            case .still: OrbSpriteCanvas(style: OrbStyle(look: look, size: Double(size), ink: style.ink, floor: style.floor,
-                                                         still: true, playing: false))
+            if family == .ring {
+                RingOrbCanvas(style: style)
+            } else {
+                switch OrbRendering.shared.renderer {
+                case .ticker: OrbTickerCanvas(style: style, fps: min(OrbRendering.shared.tickerFPS, maxFPS))
+                case .swiftUI: OrbTimelineCanvas(style: style)
+                case .layer: OrbLayerCanvas(style: style)
+                case .sprite: OrbSpriteCanvas(style: style)
+                case .apng: OrbAPNGCanvas(style: style)
+                case .still: OrbSpriteCanvas(style: OrbStyle(look: look, size: Double(size), ink: style.ink, floor: style.floor,
+                                                             still: true, playing: false))
+                }
             }
         }
         .frame(width: size, height: size)
@@ -96,6 +101,7 @@ struct OrbStyle: Equatable {
 extension EnvironmentValues {
     @Entry var orbsOnScreen = true
     @Entry var orbMaxFPS = Double.infinity
+    @Entry var orbFamily = OrbFamily.thinking
 }
 
 enum OrbClock {

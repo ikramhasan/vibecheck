@@ -304,6 +304,7 @@ struct StatusIndicator: View {
         let presentation = StatusPresentation(session)
         Orb(look: look(presentation.orb), size: size, color: presentation.tint.color,
             animated: presentation.orb != .resting)
+            .environment(\.orbFamily, settings.orbFamily)
     }
 
     private func look(_ orb: StatusPresentation.Orb) -> OrbLook {

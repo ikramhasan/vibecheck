@@ -266,3 +266,11 @@ if args.contains("timer") {
 window.orderFrontRegardless()
 app.run()
 ```
+
+## Ring orbs
+
+Settings → Loading indicator has a Ring tab. Choosing it (`settings.orbFamily = ring`) draws every
+status as a solid core with a ring instead of a dot sphere: a spinning arc while working (slower
+while blocked), a pulsing ring while waiting, a still ring otherwise. `RingOrb.swift` builds it from
+a few `CAShapeLayer`s and moves them through the same `OrbTicker`, so it costs the same discrete
+updates as Ticker and ignores `orbs.renderer`.
