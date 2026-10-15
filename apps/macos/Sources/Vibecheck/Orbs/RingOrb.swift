@@ -108,7 +108,7 @@ final class RingOrbView: OrbHostView, OrbTickable {
     }
 
     func advance(to elapsed: Double) {
-        let t = running ? elapsed : 0
+        let t = running ? elapsed + (style?.offset ?? 0) : 0
         switch motion {
         case .spin(let period):
             arc.setAffineTransform(CGAffineTransform(rotationAngle: -(t / period).truncatingRemainder(dividingBy: 1) * 2 * .pi))

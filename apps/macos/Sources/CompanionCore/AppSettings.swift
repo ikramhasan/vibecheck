@@ -25,15 +25,17 @@ public enum LoaderStyle: String, CaseIterable, Codable, Sendable {
     }
 }
 
-/// How status orbs are drawn: the dot-sphere thinking orbs, or solid ring orbs for every status.
+/// How status orbs are drawn: the dot-sphere thinking orbs, or ring orbs or buddy faces for every status.
 public enum OrbFamily: String, CaseIterable, Codable, Sendable {
     case thinking
     case ring
+    case buddy
 
     public var displayName: String {
         switch self {
         case .thinking: "Thinking"
         case .ring: "Ring"
+        case .buddy: "Buddy"
         }
     }
 }

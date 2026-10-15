@@ -31,8 +31,9 @@ struct OrbTimelineCanvas: View {
         let still = style.still
         let floor = style.floor
         let ink = style.ink
+        let offset = style.offset
         TimelineView(.animation(minimumInterval: 1.0 / 60, paused: still || !style.playing)) { context in
-            let t = still ? 0 : context.date.timeIntervalSince(OrbClock.epoch) * 1000
+            let t = still ? 0 : (context.date.timeIntervalSince(OrbClock.epoch) + offset) * 1000
             Canvas { ctx, _ in
                 model.draw(t: t) { _, x, y, r, a in
                     guard a > 0 else { return }
@@ -143,6 +144,7 @@ final class OrbLayerView: OrbHostView {
         orb.ink = ink
         orb.floor = style.floor
         orb.still = style.still
+        orb.offset = style.offset
         orb.contentsScale = scale
         orb.setNeedsDisplay()
         if running, displayLink == nil {
@@ -166,6 +168,7 @@ private final class OrbDrawingLayer: CALayer {
     var ink = CGColor(gray: 0, alpha: 0)
     var floor = 0.0
     var still = true
+    var offset = 0.0
 
     override init() {
         super.init()
@@ -181,7 +184,7 @@ private final class OrbDrawingLayer: CALayer {
 
     override func draw(in context: CGContext) {
         guard let model else { return }
-        let t = still ? 0 : Date.now.timeIntervalSince(OrbClock.epoch) * 1000
+        let t = still ? 0 : (Date.now.timeIntervalSince(OrbClock.epoch) + offset) * 1000
         model.draw(t: t) { _, x, y, r, a in
             guard a > 0 else { return }
             context.setFillColor(ink.copy(alpha: floor + (1 - floor) * a) ?? ink)
@@ -379,7 +382,7 @@ final class OrbSpriteView: OrbHostView {
                 animation.duration = sprite.duration
                 animation.repeatCount = .infinity
                 animation.isRemovedOnCompletion = false
-                let elapsed = Date.now.timeIntervalSince(OrbClock.epoch)
+                let elapsed = Date.now.timeIntervalSince(OrbClock.epoch) + style.offset
                 animation.timeOffset = elapsed.truncatingRemainder(dividingBy: sprite.duration)
                 animation.beginTime = frames.convertTime(CACurrentMediaTime(), from: nil)
                 frames.add(animation, forKey: "frames")
@@ -539,8 +542,8 @@ final class OrbTickerView: OrbHostView, OrbTickable {
     }
 
     func advance(to elapsed: Double) {
-        guard let sprite else { return }
-        let next = running ? Int(elapsed / (sprite.duration / Double(sprite.rects.count))) % sprite.rects.count : 0
+        guard let sprite, let style else { return }
+        let next = running ? Int((elapsed + style.offset) / (sprite.duration / Double(sprite.rects.count))) % sprite.rects.count : 0
         guard next != shownFrame else { return }
         shownFrame = next
         frames.contentsRect = sprite.rects[next]

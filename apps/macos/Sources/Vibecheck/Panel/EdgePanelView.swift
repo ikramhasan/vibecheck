@@ -302,7 +302,8 @@ struct StatusIndicator: View {
 
     var body: some View {
         let presentation = StatusPresentation(session)
-        Orb(look: look(presentation.orb), size: size, color: presentation.tint.color,
+        Orb(look: look(presentation.orb), face: BuddyFace(session), seed: session.id, size: size,
+            color: presentation.tint.color,
             animated: presentation.orb != .resting)
             .environment(\.orbFamily, settings.orbFamily)
     }
