@@ -79,7 +79,7 @@ final class RingOrbView: OrbHostView, OrbTickable {
         lead.path = Self.quarter(centre: centre, radius: radius, from: .pi / 4)
         trail.path = Self.quarter(centre: centre, radius: radius, from: -.pi / 4)
 
-        let diameter = side * 0.58
+        let diameter = side * 0.7
         let coreBox = CGRect(x: bounds.midX - diameter / 2, y: bounds.midY - diameter / 2, width: diameter, height: diameter)
         core.frame = coreBox
         core.path = CGPath(ellipseIn: CGRect(origin: .zero, size: coreBox.size), transform: nil)
