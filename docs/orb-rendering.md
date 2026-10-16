@@ -274,3 +274,20 @@ status as a solid core with a ring instead of a dot sphere: a spinning arc while
 while blocked), a pulsing ring while waiting, a still ring otherwise. `RingOrb.swift` builds it from
 a few `CAShapeLayer`s and moves them through the same `OrbTicker`, so it costs the same discrete
 updates as Ticker and ignores `orbs.renderer`.
+
+## Buddy orbs
+
+The Buddy tab (`settings.orbFamily = buddy`) draws every status as a small face: a squircle head
+with its eyes cut out. Working eyes read lines and glance up, waiting eyes go wide while the head
+hops, your turn is ^ ^, blocked is asleep with a z drifting up, failed is × × with a tilt, and
+interrupted is flat eyes on a faded head. When a session changes status, the eyes blink shut, the
+face and colour swap while they're closed, and the new face opens; your turn bounces once and
+failed wobbles once.
+
+`BuddyOrb.swift` rebuilds one `CAShapeLayer` path per frame from an `Expression` (look, blink, hop,
+squash, tilt, fade) on the shared `OrbTicker`. Your turn, failed and interrupted leave the ticker
+once their entrance settles, so idle sessions cost nothing. Like Ring, it ignores `orbs.renderer`.
+
+The eyes are cut out with an even-odd fill, not a path boolean op. The stroked eye shapes are built
+and normalized once, so a frame only transforms and appends cached paths: about 2 µs per orb on an
+M-series Mac, against about 21 µs when the eyes were subtracted from the head every frame.

@@ -72,10 +72,10 @@ struct SettingsPage: View {
                     .cascade(shown: isShown, index: 5, side: .trailing, paced: paced)
 
                     SettingsSection("Loading indicator",
-                                    footer: settings.orbFamily == .ring
-                                        ? "Ring orbs show every status: working, waiting for you, your turn, "
-                                            + "blocked, failed and interrupted."
-                                        : "Shown while an agent is working. Agents without an override use this.",
+                                    footer: settings.orbFamily == .thinking
+                                        ? "Shown while an agent is working. Agents without an override use this."
+                                        : "\(settings.orbFamily.displayName) orbs show every status: working, waiting for you, "
+                                            + "your turn, blocked, failed and interrupted.",
                                     grouped: false) {
                         IndicatorPicker(settings: settings)
                     }
@@ -544,7 +544,7 @@ private struct UpdatesList: View {
 
 // MARK: - Loaders
 
-/// Thinking and Ring tabs. Picking a thinking style or the ring set makes it the orb family.
+/// Thinking, Ring and Buddy tabs. Picking a thinking style or a status set makes it the orb family.
 private struct IndicatorPicker: View {
     let settings: AppSettings
     @State private var tab: OrbFamily
@@ -567,11 +567,11 @@ private struct IndicatorPicker: View {
             case .thinking:
                 LoaderGallery(selection: thinkingSelection)
                     .environment(\.orbFamily, .thinking)
-            case .ring:
-                RingOrbCard(selected: settings.orbFamily == .ring) {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { settings.orbFamily = .ring }
+            case .ring, .buddy:
+                StatusOrbCard(family: tab, selected: settings.orbFamily == tab) {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { settings.orbFamily = tab }
                 }
-                .environment(\.orbFamily, .ring)
+                .environment(\.orbFamily, tab)
             }
         }
     }
@@ -587,25 +587,27 @@ private struct IndicatorPicker: View {
     }
 }
 
-/// Every status drawn as a ring orb; click to use the set.
-private struct RingOrbCard: View {
+/// Every status drawn in one orb family; click to use the set.
+private struct StatusOrbCard: View {
+    let family: OrbFamily
     let selected: Bool
     let action: () -> Void
 
     private struct Sample {
         let name: String
         let look: OrbLook
+        let face: BuddyFace
         let tint: StatusPresentation.Tint
     }
 
     private static var samples: [Sample] {
         [
-            Sample(name: "Working", look: .working, tint: .accent),
-            Sample(name: "Waiting", look: .waiting, tint: .attention),
-            Sample(name: "Your turn", look: .base, tint: .success),
-            Sample(name: "Blocked", look: .retrying, tint: .limited),
-            Sample(name: "Failed", look: .base, tint: .failure),
-            Sample(name: "Interrupted", look: .base, tint: .muted),
+            Sample(name: "Working", look: .working, face: .working, tint: .accent),
+            Sample(name: "Waiting", look: .waiting, face: .waiting, tint: .attention),
+            Sample(name: "Your turn", look: .base, face: .yourTurn, tint: .success),
+            Sample(name: "Blocked", look: .retrying, face: .blocked, tint: .limited),
+            Sample(name: "Failed", look: .base, face: .failed, tint: .failure),
+            Sample(name: "Interrupted", look: .base, face: .interrupted, tint: .muted),
         ]
     }
 
@@ -613,7 +615,7 @@ private struct RingOrbCard: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("Ring orbs")
+                    Text("\(family.displayName) orbs")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.primary)
                     Spacer()
@@ -624,7 +626,8 @@ private struct RingOrbCard: View {
                 HStack(spacing: 0) {
                     ForEach(Self.samples, id: \.name) { sample in
                         VStack(spacing: 6) {
-                            Orb(look: sample.look, size: 26, color: sample.tint.color, animated: sample.look != .base)
+                            Orb(look: sample.look, face: sample.face, seed: sample.name, size: 26, color: sample.tint.color,
+                                animated: sample.look != .base)
                             Text(sample.name)
                                 .font(.system(size: 9.5, weight: .medium))
                                 .foregroundStyle(.secondary)
@@ -641,7 +644,7 @@ private struct RingOrbCard: View {
         .buttonStyle(.plain)
         .glassEffect(selected ? .regular.tint(.accentColor.opacity(0.25)).interactive() : .regular.interactive(),
                      in: .rect(cornerRadius: 14, style: .continuous))
-        .accessibilityLabel("Ring orbs")
+        .accessibilityLabel("\(family.displayName) orbs")
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }

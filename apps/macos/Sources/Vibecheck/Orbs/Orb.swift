@@ -53,6 +53,8 @@ enum OrbLook: Hashable {
 
 struct Orb: View {
     let look: OrbLook
+    var face = BuddyFace.working
+    var seed = ""
     var size: CGFloat = 20
     var color: Color
     var animated = true
@@ -67,12 +69,14 @@ struct Orb: View {
         let style = OrbStyle(look: look, size: Double(size),
                              ink: light ? color.mix(with: .black, by: 0.25) : color,
                              floor: light ? 0.35 : 0.2,
-                             still: !animated || reduceMotion,
-                             playing: onScreen)
+                             still: reduceMotion || (!animated && family != .buddy),
+                             playing: onScreen,
+                             offset: Self.offset(seed: seed))
         Group {
-            if family == .ring {
-                RingOrbCanvas(style: style)
-            } else {
+            switch family {
+            case .ring: RingOrbCanvas(style: style)
+            case .buddy: BuddyOrbCanvas(style: style, face: face)
+            case .thinking:
                 switch OrbRendering.shared.renderer {
                 case .ticker: OrbTickerCanvas(style: style, fps: min(OrbRendering.shared.tickerFPS, maxFPS))
                 case .swiftUI: OrbTimelineCanvas(style: style)
@@ -80,12 +84,17 @@ struct Orb: View {
                 case .sprite: OrbSpriteCanvas(style: style)
                 case .apng: OrbAPNGCanvas(style: style)
                 case .still: OrbSpriteCanvas(style: OrbStyle(look: look, size: Double(size), ink: style.ink, floor: style.floor,
-                                                             still: true, playing: false))
+                                                             still: true, playing: false, offset: 0))
                 }
             }
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
+    }
+
+    private static func offset(seed: String) -> Double {
+        let hash = seed.utf8.reduce(UInt64(14695981039346656037)) { ($0 ^ UInt64($1)) &* 1099511628211 }
+        return Double((hash >> 32) % 60_000) / 1000
     }
 }
 
@@ -96,6 +105,7 @@ struct OrbStyle: Equatable {
     let floor: Double
     let still: Bool
     let playing: Bool
+    let offset: Double
 }
 
 extension EnvironmentValues {
