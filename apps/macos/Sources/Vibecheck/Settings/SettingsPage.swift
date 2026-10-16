@@ -207,7 +207,7 @@ private struct SettingsSection<Content: View>: View {
     }
 }
 
-private struct RowDivider: View {
+struct RowDivider: View {
     var body: some View {
         Rectangle().fill(.separator).frame(height: 1)
     }
@@ -417,7 +417,7 @@ private struct SoundRow: View {
 
 // MARK: - Machines
 
-private struct MachinesList: View {
+struct MachinesList: View {
     @Bindable var settings: AppSettings
     @Environment(RemoteMachines.self) private var machines
     @State private var draft = ""
@@ -488,7 +488,7 @@ private struct MachinesList: View {
 
 // MARK: - Updates
 
-private struct LaunchAtLoginRow: View {
+struct LaunchAtLoginRow: View {
     let launchAtLogin: LaunchAtLogin
 
     var body: some View {
@@ -545,7 +545,7 @@ private struct UpdatesList: View {
 // MARK: - Loaders
 
 /// Thinking, Ring and Buddy tabs. Picking a thinking style or a status set makes it the orb family.
-private struct IndicatorPicker: View {
+struct IndicatorPicker: View {
     let settings: AppSettings
     @State private var tab: OrbFamily
 

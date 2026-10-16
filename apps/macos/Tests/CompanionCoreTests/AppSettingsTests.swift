@@ -80,4 +80,27 @@ import Testing
         defaults.set("gone", forKey: "settings.orbFamily")
         #expect(AppSettings(defaults: defaults).orbFamily == .thinking)
     }
+
+    @Test func freshInstallNeedsOnboardingUntilCompleted() throws {
+        let suite = "AppSettingsTests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let first = AppSettings(defaults: defaults)
+        #expect(!first.hasCompletedOnboarding)
+        first.orbFamily = .ring
+        #expect(!AppSettings(defaults: defaults).hasCompletedOnboarding)
+        first.hasCompletedOnboarding = true
+
+        #expect(AppSettings(defaults: defaults).hasCompletedOnboarding)
+    }
+
+    @Test func existingSettingsSkipOnboarding() throws {
+        let suite = "AppSettingsTests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        defaults.set("ring", forKey: "settings.orbFamily")
+        #expect(AppSettings(defaults: defaults).hasCompletedOnboarding)
+    }
 }
