@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var machines: RemoteMachines?
     private var diffWindow: DiffWindowController?
     private var controller: EdgePanelController?
+    private var onboarding: OnboardingWindowController?
     private var updater: AppUpdater?
     private var launchAtLogin: LaunchAtLogin?
     private var soundPlanner = SoundPlanner()
@@ -73,6 +74,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         usage.start()
         servers.start()
         if args.contains("--settings") { controller.showPage(.settings) }
+        if args.contains("--onboarding") || (!settings.hasCompletedOnboarding && !args.contains("--demo")) {
+            let onboarding = OnboardingWindowController(settings: settings, machines: machines, launchAtLogin: launchAtLogin)
+            self.onboarding = onboarding
+            onboarding.show()
+        }
     }
 
     /// Calls `apply` now and after every change to `settings.agents`.

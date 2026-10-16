@@ -168,7 +168,7 @@ struct EdgePanelView: View {
 // MARK: - Collapsed
 
 /// One status orb per session (most urgent first); the agent rides as a corner badge.
-private struct CollapsedContent: View {
+struct CollapsedContent: View {
     let sessions: [AgentSession]
     let groups: [SessionGroup]
     let servers: [DevServer]
@@ -973,7 +973,7 @@ private struct DiffBadge: View {
     }
 }
 
-private struct ContextGauge: View {
+struct ContextGauge: View {
     let usage: AgentSession.ContextUsage
 
     var body: some View {

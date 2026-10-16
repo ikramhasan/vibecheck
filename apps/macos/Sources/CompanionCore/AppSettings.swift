@@ -196,6 +196,10 @@ public final class AppSettings {
         didSet { if remoteHosts != oldValue { save(remoteHosts, key: Keys.remoteHosts) } }
     }
 
+    public var hasCompletedOnboarding: Bool {
+        didSet { if hasCompletedOnboarding != oldValue { defaults.set(hasCompletedOnboarding, forKey: Keys.onboarded) } }
+    }
+
     @ObservationIgnored private let defaults: UserDefaults
 
     private enum Keys {
@@ -205,6 +209,8 @@ public final class AppSettings {
         static let finishedSessionRemoval = "settings.finishedSessionRemoval"
         static let sounds = "settings.sounds"
         static let remoteHosts = "settings.remoteHosts"
+        static let onboarded = "settings.onboarded"
+        static let stored = [loader, orbFamily, agents, finishedSessionRemoval, sounds, remoteHosts]
     }
 
     public init(defaults: UserDefaults = .standard) {
@@ -216,6 +222,9 @@ public final class AppSettings {
             .flatMap(FinishedSessionRemoval.init(rawValue:)) ?? .default
         sounds = Self.load(SoundSettings.self, key: Keys.sounds, from: defaults) ?? .default
         remoteHosts = Self.load([RemoteHost].self, key: Keys.remoteHosts, from: defaults) ?? []
+        hasCompletedOnboarding = defaults.object(forKey: Keys.onboarded) as? Bool
+            ?? Keys.stored.contains { defaults.object(forKey: $0) != nil }
+        defaults.set(hasCompletedOnboarding, forKey: Keys.onboarded)
     }
 
     private func save<T: Encodable>(_ value: T, key: String) {
