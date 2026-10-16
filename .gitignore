@@ -34,3 +34,8 @@ npm-debug.log*
 
 # Third-party projects cloned for study (see AGENTS.md)
 /reference/
+
+# Next.js (apps/web)
+/apps/web/.next/
+/apps/web/out/
+/apps/web/next-env.d.ts

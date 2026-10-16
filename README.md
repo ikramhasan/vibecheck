@@ -6,6 +6,7 @@ A native macOS edge panel that shows live coding-agent sessions.
 apps/macos/            Swift package: CompanionCore (agent-neutral) + Vibecheck (app)
 integrations/core/     Shared session-status contract + reporter used by every integration
 integrations/pi/       pi package (extension) that reports pi sessions
+apps/web/              Landing page (Next.js, static export: npm --prefix apps/web run dev)
 ```
 
 Data flow: agent integration → `integrations/core` reporter → status file →
