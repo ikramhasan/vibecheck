@@ -40,6 +40,7 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) {
         settings.hasCompletedOnboarding = true
+        window.contentView = nil
     }
 }
 
