@@ -260,13 +260,14 @@ export type OrbOptions = OrbLook & {
 };
 
 /**
- * Draws an orb into `svg` and keeps it moving until `destroy()`; `pause()` holds it on its frame
- * and `play()` carries on. The orb draws in `currentColor`, so the svg's CSS `color` tints it.
- * With reduced motion it holds still. Needs a browser: call it once the svg is on the page.
+ * Sets up an orb's dots in `svg` and returns `draw`, which places them at orb time `t` in ms, and
+ * its look, which keys the shared clock. Reasoning's walk carries on from the last `t` drawn, so
+ * call it with a rising `t`. `mountOrb` drives it from the page's clock; a video renderer can
+ * drive it frame by frame.
  */
-export function mountOrb(
+export function orbDrawer(
   svg: SVGSVGElement,
-  { state: asked, variant, size = 20, speed = 1, label, shape, render = DOTS, density = 1, dotSize = 1, tilt = 20 }: OrbOptions = {},
+  { state: asked, variant, size = 20, label, shape, render = DOTS, density = 1, dotSize = 1, tilt = 20 }: OrbOptions = {},
 ) {
   // A state that doesn't exist (from plain JS, say) falls back to base, and a variant the state doesn't have to its default.
   const which: OrbState = asked && Object.hasOwn(VARIANTS, asked) ? asked : "base";
@@ -472,6 +473,17 @@ export function mountOrb(
     drawer.frame?.();
   };
 
+  return { look: state, draw };
+}
+
+/**
+ * Draws an orb into `svg` and keeps it moving until `destroy()`; `pause()` holds it on its frame
+ * and `play()` carries on. The orb draws in `currentColor`, so the svg's CSS `color` tints it.
+ * With reduced motion it holds still. Needs a browser: call it once the svg is on the page.
+ */
+export function mountOrb(svg: SVGSVGElement, options: OrbOptions = {}) {
+  const speed = options.speed ?? 1;
+  const { look: state, draw } = orbDrawer(svg, options);
   const look = `${state}@${speed}`;
   draw(tick(look, performance.now(), speed));
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
