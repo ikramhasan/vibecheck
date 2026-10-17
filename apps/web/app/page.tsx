@@ -61,6 +61,10 @@ export default function Home() {
           <PanelPreview />
         </section>
 
+        <section className="intro" aria-label="Intro video">
+          <video src="/intro.mp4" poster="/intro-poster.jpg" width={1920} height={1080} controls playsInline preload="none" />
+        </section>
+
         <section className="statuses" aria-labelledby="statuses-title">
           <h2 id="statuses-title">One orb per session</h2>
           <p className="section-lede">

@@ -1,0 +1,21 @@
+{
+  "name": "vibecheck-motion",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "score": "node scripts/score.ts",
+    "studio": "npm run score && remotion studio",
+    "render": "npm run score && remotion render Intro out/intro-4k.mp4 --scale=2 --crf=10 && remotion ffmpeg -y -loglevel error -i out/intro-4k.mp4 -vf scale=1920:1080:flags=lanczos -c:v libx264 -crf 16 -pix_fmt yuv420p -c:a copy -movflags +faststart out/vibecheck-intro.mp4 && rm out/intro-4k.mp4",
+    "still": "remotion still Intro"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.530",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "remotion": "4.0.530"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "typescript": "^5.9"
+  }
+}
