@@ -58,7 +58,7 @@ public struct SessionTimeline: Equatable, Sendable {
         case .backgroundEnded(let ids):
             background.removeAll { ids.contains($0.id) }
             guard awaitingBackground else { return }
-            if background.isEmpty { continueWorking(activity: "Thinking…") } else { activity = waitingActivity }
+            if background.isEmpty { settle(.idle) } else { activity = waitingActivity }
         case .turnEnded:
             settle(.idle)
             guard !background.isEmpty else { return }

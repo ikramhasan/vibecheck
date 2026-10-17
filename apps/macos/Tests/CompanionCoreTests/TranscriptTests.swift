@@ -268,6 +268,8 @@ private func timeline(_ path: String, _ format: TranscriptFormat) throws -> Sess
         t.apply(event(notification("bwatch")))
         #expect(t.activity == "Waiting on 1 command")
         t.apply(event(notification("bbuild", status: "failed")))
+        #expect(t.status == .idle)
+        t.apply(event(#"{"type":"user","origin":{"kind":"task-notification"},"message":{"role":"user","content":"<task-notification>\n<task-id>bbuild</task-id>\n<status>failed</status>\n</task-notification>"}}"#))
         #expect(t.status == .working)
         #expect(t.activity == "Thinking…")
     }
@@ -313,5 +315,11 @@ private func timeline(_ path: String, _ format: TranscriptFormat) throws -> Sess
         let t = try timeline("claude/background-task.jsonl", .claude)
         #expect(t.status == .working)
         #expect(t.task == "Run the tests")
+    }
+
+    @Test func stoppedBackgroundTaskEndsTheWaitWithoutANewTurn() throws {
+        let t = try timeline("claude/stopped-background-task.jsonl", .claude)
+        #expect(t.status == .idle)
+        #expect(t.lastReply == "Thanks, cycle 19 is in main.")
     }
 }

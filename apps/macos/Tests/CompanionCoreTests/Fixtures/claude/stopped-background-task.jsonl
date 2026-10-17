@@ -1,0 +1,10 @@
+{"type":"user","isSidechain":false,"timestamp":"2026-10-16T13:00:00Z","message":{"role":"user","content":"Start the API"}}
+{"type":"assistant","isSidechain":false,"timestamp":"2026-10-16T13:00:01Z","message":{"model":"claude-opus-5-5","role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"pnpm dev","run_in_background":true}}],"stop_reason":"tool_use"}}
+{"type":"user","isSidechain":false,"timestamp":"2026-10-16T13:00:02Z","toolUseResult":{"backgroundTaskId":"bx"},"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"Running in the background"}]}}
+{"type":"user","isSidechain":false,"timestamp":"2026-10-16T14:23:40Z","origin":{"kind":"human"},"message":{"role":"user","content":"I've merged it"}}
+{"type":"assistant","isSidechain":false,"timestamp":"2026-10-16T14:23:50Z","message":{"model":"claude-opus-5-5","role":"assistant","content":[{"type":"text","text":"Thanks, cycle 19 is in main."}],"stop_reason":"end_turn"}}
+{"type":"system","subtype":"stop_hook_summary","isSidechain":false,"timestamp":"2026-10-16T14:23:50Z"}
+{"type":"queue-operation","operation":"enqueue","timestamp":"2026-10-16T15:54:54Z","content":"<task-notification>\n<task-id>bx</task-id>\n<status>stopped</status>\n</task-notification>"}
+{"type":"queue-operation","operation":"dequeue","timestamp":"2026-10-16T15:54:54Z"}
+{"type":"user","isSidechain":false,"timestamp":"2026-10-16T15:54:54Z","origin":{"kind":"task-notification"},"promptSource":"system","queueTranscriptOnly":true,"message":{"role":"user","content":"<task-notification>\n<task-id>bx</task-id>\n<status>stopped</status>\n<summary>Background shell command didn't finish before the previous session ended</summary>\n</task-notification>"}}
+{"type":"custom-title","customTitle":"Run cycle 19"}
