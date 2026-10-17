@@ -436,6 +436,7 @@ private struct ExpandedContent: View {
         .overlay(alignment: .top) {
             DragHandle(onDrag: onDrag, onDrop: onDrop)
                 .padding(.top, PanelMetrics.flare)
+                .cascade(shown: isShown || hiddenSide == .trailing, index: 0, side: hiddenSide, paced: paced)
         }
     }
 
@@ -559,7 +560,7 @@ private struct DragHandle: View {
     let onDrag: () -> Void
     let onDrop: () -> Void
     @State private var hovering = false
-    @State private var dragging = false
+    @GestureState private var dragging = false
 
     var body: some View {
         Capsule()
@@ -568,18 +569,16 @@ private struct DragHandle: View {
             .frame(width: 96, height: PanelMetrics.handleHeight + 8)
             .contentShape(Rectangle())
             .pointerStyle(dragging ? .grabActive : .grabIdle)
+            .animation(.easeOut(duration: 0.15), value: dragging)
             .onHover { h in withAnimation(.easeOut(duration: 0.15)) { hovering = h } }
             .gesture(
                 DragGesture(minimumDistance: 2, coordinateSpace: .global)
-                    .onChanged { _ in
-                        if !dragging { withAnimation(.easeOut(duration: 0.15)) { dragging = true } }
-                        onDrag()
-                    }
-                    .onEnded { _ in
-                        withAnimation(.easeOut(duration: 0.15)) { dragging = false }
-                        onDrop()
-                    }
+                    .updating($dragging) { _, isDragging, _ in isDragging = true }
+                    .onChanged { _ in onDrag() }
             )
+            .onChange(of: dragging) { _, isDragging in
+                if !isDragging { onDrop() }
+            }
             .help("Drag to move the panel")
             .accessibilityLabel("Move panel")
     }
