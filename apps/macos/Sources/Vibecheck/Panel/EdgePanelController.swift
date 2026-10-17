@@ -28,6 +28,7 @@ enum PanelMetrics {
     static let expandedWidth: CGFloat = 340
     static let headerHeight: CGFloat = 44
     static let handleHeight: CGFloat = 6
+    static let edgeSnapDistance: CGFloat = 24
 
     // Session list, grouped by project.
     static let groupHeader: CGFloat = 26
@@ -398,11 +399,26 @@ final class EdgePanelController {
         let w = PanelMetrics.expandedWidth
         let h = expandedCardHeight
         let visible = screen.visibleFrame
+        let x = mouse.x - grabOffset.width
+        let leftGap = x - w / 2 - screen.frame.minX
+        let rightGap = screen.frame.maxX - (x + w / 2)
+        let snapSide: PanelPlacement.Side? = min(leftGap, rightGap) > PanelMetrics.edgeSnapDistance
+            ? nil : (leftGap < rightGap ? .left : .right)
         let center = CGPoint(
-            x: min(max(mouse.x - grabOffset.width, screen.frame.minX + w / 2), screen.frame.maxX - w / 2),
+            x: snapSide.map { $0 == .left ? screen.frame.minX + w / 2 : screen.frame.maxX - w / 2 }
+                ?? min(max(x, screen.frame.minX + w / 2), screen.frame.maxX - w / 2),
             y: min(max(mouse.y - grabOffset.height, visible.minY + h / 2), max(visible.maxY - h / 2, visible.minY + h / 2)))
         let frame = NSRect(x: screen.frame.minX, y: visible.minY, width: screen.frame.width, height: visible.height)
-        state.dragCenter = CGPoint(x: center.x - frame.minX, y: frame.maxY - center.y)
+        let dragCenter = CGPoint(x: center.x - frame.minX, y: frame.maxY - center.y)
+        if (snapSide == nil) != state.detached {
+            if let snapSide { state.placement.side = snapSide }
+            withAnimation(moveAnimation(.spring(response: 0.3, dampingFraction: 0.72))) {
+                state.detached = snapSide == nil
+                state.dragCenter = dragCenter
+            }
+        } else {
+            state.dragCenter = dragCenter
+        }
         if screen != dragScreen {
             dragScreen = screen
             panel.setFrame(frame, display: true)
@@ -414,7 +430,6 @@ final class EdgePanelController {
         dragScreen = nil
         let card = cardRect(expanded: true)
         grabOffset = CGSize(width: mouse.x - card.midX, height: mouse.y - card.midY)
-        withAnimation(moveAnimation(.spring(response: 0.3, dampingFraction: 0.72))) { state.detached = true }
     }
 
     private func dropCard() {
