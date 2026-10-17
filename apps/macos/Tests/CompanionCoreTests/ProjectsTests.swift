@@ -93,6 +93,7 @@ private func session(_ id: String, _ cwd: String, _ status: AgentSession.Status)
 @Suite struct ProjectIconLocatorTests {
     @Test func prefersVectorFavicon() throws {
         let root = try tempDir()
+        try touch(root.appending(path: ".git/HEAD"))
         try touch(root.appending(path: "public/favicon.ico"))
         try touch(root.appending(path: "public/favicon.svg"))
         #expect(ProjectIconLocator.iconURLs(forProjectAt: root.path).first?.lastPathComponent == "favicon.svg")
@@ -100,6 +101,7 @@ private func session(_ id: String, _ cwd: String, _ status: AgentSession.Status)
 
     @Test func findsLargestAppIcon() throws {
         let root = try tempDir()
+        try touch(root.appending(path: ".git/HEAD"))
         let set = root.appending(path: "MyApp/Assets.xcassets/AppIcon.appiconset")
         try touch(set.appending(path: "small.png"), "x")
         try touch(set.appending(path: "large.png"), String(repeating: "x", count: 100))
@@ -108,6 +110,7 @@ private func session(_ id: String, _ cwd: String, _ status: AgentSession.Status)
 
     @Test func findsIconsInsideMonorepoPackages() throws {
         let root = try tempDir()
+        try touch(root.appending(path: ".git/HEAD"))
         try touch(root.appending(path: "README.md"))
         try touch(root.appending(path: "apps/web/app/icon.png"))
         #expect(ProjectIconLocator.iconURLs(forProjectAt: root.path).first?.path(percentEncoded: false)
@@ -116,6 +119,7 @@ private func session(_ id: String, _ cwd: String, _ status: AgentSession.Status)
 
     @Test func prefersAppIconOverSmallFavicon() throws {
         let root = try tempDir()
+        try touch(root.appending(path: ".git/HEAD"))
         try touch(root.appending(path: "landing/src/app/favicon.ico"))
         try touch(root.appending(path: "client/macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_1024.png"))
         try touch(root.appending(path: "src-tauri/icons/icon.icns"))
@@ -125,6 +129,7 @@ private func session(_ id: String, _ cwd: String, _ status: AgentSession.Status)
 
     @Test func skipsDependenciesBuildOutputAndGitIgnoredFolders() throws {
         let root = try tempDir()
+        try touch(root.appending(path: ".git/HEAD"))
         try touch(root.appending(path: ".gitignore"), "# clones\n/reference/\n*.log\napps/web/out/\n")
         try touch(root.appending(path: "reference/other/favicon.svg"))
         try touch(root.appending(path: "node_modules/pkg/icon.svg"))
@@ -137,10 +142,19 @@ private func session(_ id: String, _ cwd: String, _ status: AgentSession.Status)
 
     @Test func ignoresUnrelatedImages() throws {
         let root = try tempDir()
+        try touch(root.appending(path: ".git/HEAD"))
         try touch(root.appending(path: "Assets.xcassets/Hero.imageset/hero.png"))
         try touch(root.appending(path: "res/drawable/ic_launcher.png"))
         try touch(root.appending(path: "public/screenshot.png"))
         #expect(ProjectIconLocator.iconURLs(forProjectAt: root.path).isEmpty)
+    }
+
+    @Test func outsideGitOnlyChecksTheFolderItself() throws {
+        let root = try tempDir()
+        try touch(root.appending(path: "Applications/Some.app/Contents/Resources/AppIcon.icns"))
+        #expect(ProjectIconLocator.iconURLs(forProjectAt: root.path).isEmpty)
+        try touch(root.appending(path: "favicon.ico"))
+        #expect(ProjectIconLocator.iconURLs(forProjectAt: root.path).map(\.lastPathComponent) == ["favicon.ico"])
     }
 
     @Test func noIcon() throws {

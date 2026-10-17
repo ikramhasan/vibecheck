@@ -157,6 +157,7 @@ public enum ProjectIconLocator {
     public static func iconURLs(forProjectAt root: String, fileManager: FileManager = .default) -> [URL] {
         let base = URL(fileURLWithPath: root, isDirectory: true)
         let skipped = skippedDirectories.union(gitIgnoredNames(in: base))
+        let depthLimit = fileManager.fileExists(atPath: base.appending(path: ".git").path) ? maxDepth : 0
         var found: [(kind: Kind, depth: Int, bytes: Int, url: URL)] = []
         var queue: [(dir: URL, depth: Int)] = [(base, 0)]
         var next = 0
@@ -167,7 +168,7 @@ public enum ProjectIconLocator {
                 let values = try? child.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey, .fileSizeKey])
                 let name = child.lastPathComponent
                 if values?.isDirectory == true {
-                    if depth < maxDepth, !skipped.contains(name), !name.hasPrefix(".") || name == ".github" {
+                    if depth < depthLimit, !skipped.contains(name), !name.hasPrefix(".") || name == ".github" {
                         queue.append((child, depth + 1))
                     }
                     continue
