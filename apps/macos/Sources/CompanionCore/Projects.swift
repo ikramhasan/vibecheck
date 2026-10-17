@@ -135,68 +135,90 @@ public final class ProjectResolver: @unchecked Sendable {
     }
 }
 
-/// Finds a project's own icon (web favicon, app icon, logo) without scanning the tree.
+/// Finds a project's own icon (favicon, app icon, logo) anywhere in its tree, so monorepos
+/// (`apps/web/app/icon.png`), Xcode/Flutter/Tauri/Android apps and plain websites all match.
+/// Walks breadth-first within a fixed budget, skipping dependencies, build output and simple
+/// names from the root `.gitignore`.
 public enum ProjectIconLocator {
-    /// Checked in order; vector and large raster files first.
-    static let candidates = [
-        "favicon.svg", "public/favicon.svg", "static/favicon.svg", "app/icon.svg", "src/app/icon.svg",
-        "public/apple-touch-icon.png", "app/apple-icon.png", "src/app/apple-icon.png",
-        "app/icon.png", "src/app/icon.png", "public/icon.png", "public/logo.svg", "public/logo.png",
-        "favicon.png", "public/favicon.png", "static/favicon.png", "src/assets/favicon.png",
-        "favicon.ico", "public/favicon.ico", "static/favicon.ico", "app/favicon.ico", "src/app/favicon.ico",
-        "src/favicon.ico", "web/favicon.png",
-        "assets/icon.png", "assets/images/icon.png", "icon.png", "icon.svg", "logo.svg", "logo.png",
-        ".github/icon.png", ".github/logo.png", "docs/logo.png",
+    static let maxDepth = 6
+    static let maxDirectories = 3000
+
+    static let skippedDirectories: Set<String> = [
+        "node_modules", "bower_components", "vendor", "Pods", "Carthage", "DerivedData",
+        "build", "dist", "out", "target", "coverage", "tmp",
+        "test", "tests", "__tests__", "spec", "fixtures", "Fixtures", "example", "examples", "samples",
     ]
 
-    /// Directories (relative to the root) that commonly hold an Xcode/Flutter `AppIcon.appiconset`.
-    static let assetCatalogParents = ["", "ios/Runner", "macos/Runner", "Resources", "Sources", "App"]
-
-    public static func iconURL(forProjectAt root: String, fileManager: FileManager = .default) -> URL? {
-        let base = URL(fileURLWithPath: root, isDirectory: true)
-        for rel in candidates {
-            let url = base.appending(path: rel)
-            if isNonEmptyFile(url, fileManager) { return url }
-        }
-        return appIcon(in: base, fileManager: fileManager)
+    enum Kind: Int, Comparable {
+        case vector, appIcon, raster, ico, logo
+        static func < (a: Kind, b: Kind) -> Bool { a.rawValue < b.rawValue }
     }
 
-    /// Largest PNG in the first `AppIcon.appiconset` found within two levels of the
-    /// usual parents (e.g. `MyApp/Assets.xcassets/AppIcon.appiconset`).
-    private static func appIcon(in base: URL, fileManager: FileManager) -> URL? {
-        var catalogs: [URL] = []
-        for parent in assetCatalogParents {
-            let dir = parent.isEmpty ? base : base.appending(path: parent)
-            catalogs += children(of: dir, fileManager).filter { $0.pathExtension == "xcassets" }
-            for child in children(of: dir, fileManager) where child.hasDirectoryPath && !skip(child) {
-                catalogs += children(of: child, fileManager).filter { $0.pathExtension == "xcassets" }
+    public static func iconURLs(forProjectAt root: String, fileManager: FileManager = .default,
+                                home: String = NSHomeDirectory()) -> [URL] {
+        let base = URL(fileURLWithPath: root, isDirectory: true)
+        let skipped = skippedDirectories.union(gitIgnoredNames(in: base))
+        let isHome = base.standardizedFileURL.path == URL(fileURLWithPath: home).standardizedFileURL.path
+        let isCheckout = fileManager.fileExists(atPath: base.appending(path: ".git").path)
+        let depthLimit = isCheckout && !isHome ? maxDepth : 0
+        var found: [(kind: Kind, depth: Int, bytes: Int, url: URL)] = []
+        var queue: [(dir: URL, depth: Int)] = [(base, 0)]
+        var next = 0
+        while next < queue.count, next < maxDirectories {
+            let (dir, depth) = queue[next]
+            next += 1
+            for child in children(of: dir, fileManager) {
+                let values = try? child.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey, .fileSizeKey])
+                let name = child.lastPathComponent
+                if values?.isDirectory == true {
+                    if depth < depthLimit, !skipped.contains(name), !name.hasPrefix(".") || name == ".github" {
+                        queue.append((child, depth + 1))
+                    }
+                    continue
+                }
+                guard values?.isRegularFile == true, let bytes = values?.fileSize, bytes > 0,
+                      let kind = kind(of: child) else { continue }
+                found.append((kind, depth, bytes, child))
             }
         }
-        for catalog in catalogs {
-            let set = catalog.appending(path: "AppIcon.appiconset")
-            let pngs = children(of: set, fileManager).filter { $0.pathExtension.lowercased() == "png" }
-            if let best = pngs.max(by: { size($0, fileManager) < size($1, fileManager) }) { return best }
+        return found.sorted { ($0.kind, $0.depth, -$0.bytes) < ($1.kind, $1.depth, -$1.bytes) }.map(\.url)
+    }
+
+    static func kind(of url: URL) -> Kind? {
+        let name = url.lastPathComponent.lowercased()
+        let ext = url.pathExtension.lowercased()
+        let folder = url.deletingLastPathComponent().lastPathComponent
+        switch name {
+        case "favicon.svg", "icon.svg": return .vector
+        case "apple-icon.png", "apple-touch-icon.png", "icon-512.png", "icon-512x512.png",
+             "android-chrome-512x512.png": return .appIcon
+        case "icon.png", "favicon.png", "icon-192.png", "android-chrome-192x192.png": return .raster
+        case "favicon.ico", "icon.ico": return .ico
+        case "logo.svg", "logo.png": return .logo
+        default: break
         }
+        if ext == "icns" { return .appIcon }
+        if ext == "png", folder.hasPrefix("AppIcon"), folder.hasSuffix(".appiconset") { return .appIcon }
+        if name == "ic_launcher.png", folder.hasPrefix("mipmap-") { return .appIcon }
         return nil
     }
 
-    private static func skip(_ url: URL) -> Bool {
-        let name = url.lastPathComponent
-        return name.hasPrefix(".") || ["node_modules", "build", "dist", "Pods", "DerivedData", "vendor"].contains(name)
+    static func gitIgnoredNames(in base: URL) -> Set<String> {
+        guard let text = try? String(contentsOf: base.appending(path: ".gitignore"), encoding: .utf8) else { return [] }
+        var names: Set<String> = []
+        for line in text.split(whereSeparator: \.isNewline) {
+            var entry = line.trimmingCharacters(in: .whitespaces)
+            if entry.isEmpty || entry.hasPrefix("#") || entry.hasPrefix("!") { continue }
+            if entry.hasPrefix("/") { entry.removeFirst() }
+            if entry.hasSuffix("/") { entry.removeLast() }
+            if entry.isEmpty || entry.contains(where: { "/*?[".contains($0) }) { continue }
+            names.insert(entry)
+        }
+        return names
     }
 
     private static func children(of dir: URL, _ fm: FileManager) -> [URL] {
-        (try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.isDirectoryKey],
-                                     options: [.skipsHiddenFiles])) ?? []
-    }
-
-    private static func size(_ url: URL, _ fm: FileManager) -> Int {
-        ((try? fm.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.intValue ?? 0
-    }
-
-    private static func isNonEmptyFile(_ url: URL, _ fm: FileManager) -> Bool {
-        var isDir: ObjCBool = false
-        return fm.fileExists(atPath: url.path, isDirectory: &isDir) && !isDir.boolValue && size(url, fm) > 0
+        (try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey, .fileSizeKey])) ?? []
     }
 }
 

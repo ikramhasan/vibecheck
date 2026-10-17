@@ -24,8 +24,9 @@ final class ProjectIcons {
         if !requested.contains(root) {
             requested.insert(root)
             Task.detached(priority: .utility) {
-                guard let url = ProjectIconLocator.iconURL(forProjectAt: root),
-                      let image = NSImage(contentsOf: url), image.isValid else { return }
+                let image = ProjectIconLocator.iconURLs(forProjectAt: root).lazy
+                    .compactMap(NSImage.init(contentsOf:)).first(where: \.isValid)
+                guard let image else { return }
                 await MainActor.run { ProjectIcons.shared.icons[root] = image }
             }
         }
