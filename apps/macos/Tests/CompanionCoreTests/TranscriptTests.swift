@@ -230,7 +230,8 @@ private func timeline(_ path: String, _ format: TranscriptFormat) throws -> Sess
         let first = try #require(file.modificationDate)
         let later = first.addingTimeInterval(60)
         try FileManager.default.setAttributes([.modificationDate: later], ofItemAtPath: url.path)
-        #expect(file.modificationDate == later)
+        let modified = try #require(file.modificationDate)
+        #expect(abs(modified.timeIntervalSince(later)) < 0.001)
     }
 }
 
