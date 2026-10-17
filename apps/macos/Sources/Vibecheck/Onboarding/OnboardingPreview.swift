@@ -160,7 +160,7 @@ private struct PreviewPanel: View {
                 .opacity(expanded ? 1 : 0)
                 .scaleEffect(expanded ? 1 : 0.96, anchor: .trailing)
 
-            CollapsedContent(sessions: sessions, groups: groups, servers: [], usage: usage)
+            CollapsedContent(sessions: sessions, groups: groups, servers: [], usage: usage, side: .right)
                 .frame(width: PanelMetrics.collapsedWidth)
                 .opacity(expanded ? 0 : 1)
         }

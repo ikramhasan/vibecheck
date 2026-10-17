@@ -1,15 +1,32 @@
 import CompanionCore
 import SwiftUI
 
-/// The tab silhouette: flush against the right screen edge, convex corners on the left,
+/// The tab silhouette: flush against the screen edge, convex corners on the far side,
 /// and concave "flares" top and bottom where it melts into the edge (like the notch).
 struct EdgeTabShape: Shape {
+    var side: PanelPlacement.Side = .right
+    var attached: CGFloat = 1
     var flare: CGFloat = PanelMetrics.flare
     var corner: CGFloat = PanelMetrics.corner
 
+    var animatableData: CGFloat {
+        get { attached }
+        set { attached = newValue }
+    }
+
     func path(in rect: CGRect) -> Path {
-        let f = min(flare, rect.height / 4)
+        let f = min(flare, rect.height / 4) * min(max(attached * 2 - 1, 0), 1)
         let c = min(corner, (rect.width - f) / 2, (rect.height - 2 * f) / 2)
+        let path = f > 0
+            ? flared(in: rect, flare: f, corner: c)
+            : UnevenRoundedRectangle(topLeadingRadius: c, bottomLeadingRadius: c,
+                                     bottomTrailingRadius: c * min(max(1 - attached * 2, 0), 1),
+                                     topTrailingRadius: c * min(max(1 - attached * 2, 0), 1)).path(in: rect)
+        guard side == .left else { return path }
+        return path.applying(CGAffineTransform(a: -1, b: 0, c: 0, d: 1, tx: rect.minX + rect.maxX, ty: 0))
+    }
+
+    private func flared(in rect: CGRect, flare f: CGFloat, corner c: CGFloat) -> Path {
         var p = Path()
         p.move(to: CGPoint(x: rect.maxX, y: rect.minY))
         p.addArc(tangent1End: CGPoint(x: rect.maxX, y: rect.minY + f),
@@ -48,8 +65,12 @@ struct EdgePanelView: View {
     let onShowActionLog: (ActionRunKey) -> Void
     let onCloseActionPage: () -> Void
     let onQuit: () -> Void
+    let onDrag: () -> Void
+    let onDrop: () -> Void
     @Environment(AppSettings.self) private var settings
 
+    private var side: PanelPlacement.Side { state.placement.side }
+    private var edge: Alignment { side == .right ? .trailing : .leading }
     private var expanded: Bool { state.mode == .expanded }
     private var hidden: Bool { state.mode == .hidden }
     private var shown: [AgentSession] { state.completed.visible(store.sessions) }
@@ -66,17 +87,27 @@ struct EdgePanelView: View {
         let width = expanded ? PanelMetrics.expandedWidth : PanelMetrics.collapsedWidth
         let height = expanded ? pageHeight(groups) : PanelMetrics.collapsedHeight(count: count, hasUsage: !usage.usage.isEmpty)
 
-        ZStack(alignment: .trailing) {
-            Color.clear
+        GeometryReader { proxy in
+            let origin = cardOrigin(width: width, height: height, in: proxy.size)
             card(groups: groups, width: width, height: height)
-                // Hidden = tucked fully past the screen edge.
-                .offset(x: hidden ? width + 12 : 0)
+                .scaleEffect(state.detached ? 1.03 : 1)
+                .shadow(color: .black.opacity(state.detached ? 0.22 : 0), radius: 24, y: 10)
+                .offset(x: origin.x, y: origin.y)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func cardOrigin(width: CGFloat, height: CGFloat, in size: CGSize) -> CGPoint {
+        if let center = state.dragCenter {
+            return CGPoint(x: center.x - width / 2, y: center.y - height / 2)
+        }
+        let tucked = hidden ? width + 12 : 0
+        let x = side == .right ? size.width - width + tucked : -tucked
+        let centerFromTop = size.height - state.placement.centerFromBottom(cardHeight: height, in: size.height)
+        return CGPoint(x: x, y: centerFromTop - height / 2)
     }
 
     private func card(groups: [SessionGroup], width: CGFloat, height: CGFloat) -> some View {
-        ZStack(alignment: .trailing) {
+        ZStack(alignment: edge) {
             // Both pages stay mounted so their items can cascade past each other.
             ZStack(alignment: .top) {
                 ExpandedContent(groups: groups, sessionCount: count, usage: usage.usage,
@@ -94,7 +125,8 @@ struct EdgePanelView: View {
                                 onClearCompleted: onClearCompleted, onDismiss: onDismiss,
                                 onShowServers: onShowServers, onShowDiff: onShowDiff,
                                 onStopServer: servers.stopServer, onEditAction: onEditAction,
-                                onShowActionLog: onShowActionLog, onQuit: onQuit)
+                                onShowActionLog: onShowActionLog, onQuit: onQuit,
+                                onDrag: onDrag, onDrop: onDrop)
                     .frame(height: tabHeight(groups), alignment: .top)
                     .environment(\.orbsOnScreen, expanded && state.page == .sessions && !showsQuestions)
                     .opacity(showsQuestions ? 0 : 1)
@@ -132,17 +164,17 @@ struct EdgePanelView: View {
             }
             .frame(width: PanelMetrics.expandedWidth, height: pageHeight(groups), alignment: .top)
             .opacity(expanded ? 1 : 0)
-            .scaleEffect(expanded ? 1 : 0.96, anchor: .trailing)
+            .scaleEffect(expanded ? 1 : 0.96, anchor: side == .right ? .trailing : .leading)
 
             CollapsedContent(sessions: shown, groups: groups, servers: servers.servers,
-                             usage: usage.usage)
+                             usage: usage.usage, side: side)
                 .frame(width: PanelMetrics.collapsedWidth)
                 .environment(\.orbsOnScreen, state.mode == .collapsed)
                 .opacity(expanded ? 0 : 1)
         }
-        .frame(width: width, height: height, alignment: .trailing)
-        .clipShape(EdgeTabShape())
-        .glassEffect(.regular, in: EdgeTabShape())
+        .frame(width: width, height: height, alignment: edge)
+        .clipShape(EdgeTabShape(side: side, attached: state.detached ? 0 : 1))
+        .glassEffect(.regular, in: EdgeTabShape(side: side, attached: state.detached ? 0 : 1))
     }
 
     private func pageHeight(_ groups: [SessionGroup]) -> CGFloat {
@@ -173,6 +205,7 @@ struct CollapsedContent: View {
     let groups: [SessionGroup]
     let servers: [DevServer]
     let usage: [ProviderUsage]
+    let side: PanelPlacement.Side
 
     var body: some View {
         let ordered = groups.flatMap { g in g.sessions.map { (g.project, $0) } }
@@ -180,7 +213,7 @@ struct CollapsedContent: View {
         GlassEffectContainer(spacing: 4) {
             badges(ordered: ordered, visible: visible)
         }
-        .padding(.leading, 3) // optically center between left edge and screen edge
+        .padding(side == .right ? .leading : .trailing, 3) // optically center between the far side and the screen edge
         .animation(.spring(response: 0.4, dampingFraction: 0.7), value: ordered.map(\.1.id))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(sessions.isEmpty ? "Agent usage" : accessibilitySummary)
@@ -362,6 +395,8 @@ private struct ExpandedContent: View {
     let onEditAction: (QuickAction?) -> Void
     let onShowActionLog: (ActionRunKey) -> Void
     let onQuit: () -> Void
+    let onDrag: () -> Void
+    let onDrop: () -> Void
 
     @Namespace private var glass
 
@@ -396,8 +431,13 @@ private struct ExpandedContent: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.top, PanelMetrics.flare)
+        .padding(.top, PanelMetrics.flare + PanelMetrics.handleHeight)
         .padding(.bottom, PanelMetrics.flare + 6)
+        .overlay(alignment: .top) {
+            DragHandle(onDrag: onDrag, onDrop: onDrop)
+                .padding(.top, PanelMetrics.flare)
+                .cascade(shown: isShown || hiddenSide == .trailing, index: 0, side: hiddenSide, paced: paced)
+        }
     }
 
     private var sessionsSection: some View {
@@ -513,6 +553,34 @@ private struct ExpandedContent: View {
                     .cascade(shown: sessionsShown, index: index + 1, side: sessionsSide, paced: paced)
             }
         }
+    }
+}
+
+private struct DragHandle: View {
+    let onDrag: () -> Void
+    let onDrop: () -> Void
+    @State private var hovering = false
+    @GestureState private var dragging = false
+
+    var body: some View {
+        Capsule()
+            .fill(hovering || dragging ? HierarchicalShapeStyle.secondary : .quaternary)
+            .frame(width: hovering || dragging ? 44 : 36, height: 4)
+            .frame(width: 96, height: PanelMetrics.handleHeight + 8)
+            .contentShape(Rectangle())
+            .pointerStyle(dragging ? .grabActive : .grabIdle)
+            .animation(.easeOut(duration: 0.15), value: dragging)
+            .onHover { h in withAnimation(.easeOut(duration: 0.15)) { hovering = h } }
+            .gesture(
+                DragGesture(minimumDistance: 2, coordinateSpace: .global)
+                    .updating($dragging) { _, isDragging, _ in isDragging = true }
+                    .onChanged { _ in onDrag() }
+            )
+            .onChange(of: dragging) { _, isDragging in
+                if !isDragging { onDrop() }
+            }
+            .help("Drag to move the panel")
+            .accessibilityLabel("Move panel")
     }
 }
 

@@ -20,7 +20,7 @@ enum ActionMetrics {
     }
 
     static func pageHeight(_ count: Int) -> CGFloat {
-        PanelMetrics.flare * 2 + PanelMetrics.headerHeight + listHeight(count) + 12
+        PanelMetrics.flare * 2 + PanelMetrics.handleHeight + PanelMetrics.headerHeight + listHeight(count) + 12
     }
 }
 

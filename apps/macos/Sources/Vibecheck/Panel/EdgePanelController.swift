@@ -27,6 +27,8 @@ enum PanelMetrics {
 
     static let expandedWidth: CGFloat = 340
     static let headerHeight: CGFloat = 44
+    static let handleHeight: CGFloat = 6
+    static let edgeSnapDistance: CGFloat = 24
 
     // Session list, grouped by project.
     static let groupHeader: CGFloat = 26
@@ -67,7 +69,7 @@ enum PanelMetrics {
     }
 
     static func expandedHeight(groups: [SessionGroup], usage: [ProviderUsage] = []) -> CGFloat {
-        flare * 2 + headerHeight + listHeight(groups, hasUsage: !usage.isEmpty) + usageHeight(usage) + 12
+        flare * 2 + handleHeight + headerHeight + listHeight(groups, hasUsage: !usage.isEmpty) + usageHeight(usage) + 12
     }
 
     /// The Settings page has a fixed height; its content scrolls.
@@ -91,6 +93,9 @@ final class PanelState {
     var editingAction: QuickAction?
     var loggedRun: ActionRunKey?
     var completed = CompletedFilter()
+    var placement = PanelPlacement()
+    var dragCenter: CGPoint?
+    var detached = false
 }
 
 /// A borderless, non-activating panel that floats above normal windows on every Space.
@@ -144,6 +149,9 @@ final class EdgePanelController {
     private var lastPointerOverCard: NSPoint?
     private var expandedCardHeight: CGFloat = 0
     private var collapsedCardHeight: CGFloat = 0
+    private var grabOffset = CGSize.zero
+    private var dragScreen: NSScreen?
+    private var settleWork: DispatchWorkItem?
 
     init(store: SessionStore, usage: UsageStore, servers: DevServerStore, actions: ActionStore, diffs: DiffStatsStore,
          onShowDiff: @escaping (AgentSession) -> Void,
@@ -154,6 +162,7 @@ final class EdgePanelController {
         self.actions = actions
         self.settings = settings
         panel = EdgePanel(contentRect: .zero)
+        state.placement = settings.panelPlacement
 
         let root = EdgePanelView(store: store, usage: usage, servers: servers, actions: actions, diffs: diffs, updater: updater,
                                  launchAtLogin: launchAtLogin,
@@ -170,7 +179,9 @@ final class EdgePanelController {
                                  onSaveAction: { [weak self] in self?.saveAction($0) },
                                  onShowActionLog: { [weak self] in self?.showLog(of: $0) },
                                  onCloseActionPage: { [weak self] in self?.showPage(.actions) },
-                                 onQuit: { NSApp.terminate(nil) })
+                                 onQuit: { NSApp.terminate(nil) },
+                                 onDrag: { [weak self] in self?.dragCard() },
+                                 onDrop: { [weak self] in self?.dropCard() })
             .environment(settings)
             .environment(machines)
         let hosting = FirstClickHostingView(rootView: root)
@@ -350,16 +361,19 @@ final class EdgePanelController {
 
     // MARK: - Layout
 
-    private var screen: NSScreen? { NSScreen.main ?? NSScreen.screens.first }
+    private var placementScreen: NSScreen? {
+        NSScreen.screens.first { $0.displayUUID != nil && $0.displayUUID == state.placement.displayUUID }
+            ?? NSScreen.main ?? NSScreen.screens.first
+    }
 
     /// The window spans the screen's full height and never resizes while the card animates
     /// inside it: resizing mid-animation makes the card jump. Clicks outside the card pass through.
     private func reposition() {
-        guard let screen else { return }
+        guard state.dragCenter == nil, let screen = placementScreen else { return }
         let width = PanelMetrics.expandedWidth + PanelMetrics.shadowPadding
         let visible = screen.visibleFrame
-        let frame = NSRect(x: screen.frame.maxX - width, y: visible.minY, width: width, height: visible.height)
-        panel.setFrame(frame, display: true)
+        let x = state.placement.side == .right ? screen.frame.maxX - width : screen.frame.minX
+        panel.setFrame(NSRect(x: x, y: visible.minY, width: width, height: visible.height), display: true)
     }
 
     /// Screen-space rect of the visible card, matching EdgePanelView's layout.
@@ -367,7 +381,77 @@ final class EdgePanelController {
         let w = expanded ? PanelMetrics.expandedWidth : PanelMetrics.collapsedWidth
         let h = expanded ? expandedCardHeight : collapsedCardHeight
         let f = panel.frame
-        return NSRect(x: f.maxX - w, y: f.midY - h / 2, width: w, height: h)
+        if let center = state.dragCenter {
+            return NSRect(x: f.minX + center.x - w / 2, y: f.maxY - center.y - h / 2, width: w, height: h)
+        }
+        let x = state.placement.side == .right ? f.maxX - w : f.minX
+        let centerY = f.minY + state.placement.centerFromBottom(cardHeight: h, in: f.height)
+        return NSRect(x: x, y: centerY - h / 2, width: w, height: h)
+    }
+
+    // MARK: - Moving
+
+    private func dragCard() {
+        let mouse = NSEvent.mouseLocation
+        if state.dragCenter == nil { liftCard(at: mouse) }
+        guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }) ?? dragScreen
+        else { return }
+        let w = PanelMetrics.expandedWidth
+        let h = expandedCardHeight
+        let visible = screen.visibleFrame
+        let x = mouse.x - grabOffset.width
+        let leftGap = x - w / 2 - screen.frame.minX
+        let rightGap = screen.frame.maxX - (x + w / 2)
+        let snapSide: PanelPlacement.Side? = min(leftGap, rightGap) > PanelMetrics.edgeSnapDistance
+            ? nil : (leftGap < rightGap ? .left : .right)
+        let center = CGPoint(
+            x: snapSide.map { $0 == .left ? screen.frame.minX + w / 2 : screen.frame.maxX - w / 2 }
+                ?? min(max(x, screen.frame.minX + w / 2), screen.frame.maxX - w / 2),
+            y: min(max(mouse.y - grabOffset.height, visible.minY + h / 2), max(visible.maxY - h / 2, visible.minY + h / 2)))
+        let frame = NSRect(x: screen.frame.minX, y: visible.minY, width: screen.frame.width, height: visible.height)
+        let dragCenter = CGPoint(x: center.x - frame.minX, y: frame.maxY - center.y)
+        if (snapSide == nil) != state.detached {
+            if let snapSide { state.placement.side = snapSide }
+            withAnimation(moveAnimation(.spring(response: 0.3, dampingFraction: 0.72))) {
+                state.detached = snapSide == nil
+                state.dragCenter = dragCenter
+            }
+        } else {
+            state.dragCenter = dragCenter
+        }
+        if screen != dragScreen {
+            dragScreen = screen
+            panel.setFrame(frame, display: true)
+        }
+    }
+
+    private func liftCard(at mouse: NSPoint) {
+        settleWork?.cancel()
+        dragScreen = nil
+        let card = cardRect(expanded: true)
+        grabOffset = CGSize(width: mouse.x - card.midX, height: mouse.y - card.midY)
+    }
+
+    private func dropCard() {
+        guard let dragCenter = state.dragCenter, let screen = dragScreen else { return }
+        let f = panel.frame
+        let center = CGPoint(x: f.minX + dragCenter.x, y: f.maxY - dragCenter.y)
+        let placement = PanelPlacement.dropped(at: center, in: screen.visibleFrame, displayUUID: screen.displayUUID)
+        settings.panelPlacement = placement
+        lastPointerOverCard = NSEvent.mouseLocation
+        withAnimation(moveAnimation(.spring(response: 0.48, dampingFraction: 0.74))) {
+            state.placement = placement
+            state.dragCenter = nil
+            state.detached = false
+        }
+        dragScreen = nil
+        let work = DispatchWorkItem { [weak self] in self?.reposition() }
+        settleWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
+    }
+
+    private func moveAnimation(_ spring: Animation) -> Animation {
+        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? .easeOut(duration: 0.18) : spring
     }
 
     // MARK: - Hover tracking
@@ -384,7 +468,7 @@ final class EdgePanelController {
     }
 
     private func tick() {
-        guard presentation.mode != .hidden else { return }
+        guard presentation.mode != .hidden, state.dragCenter == nil else { return }
         let mouse = NSEvent.mouseLocation
         let inside: Bool
         if presentation.mode == .expanded {
@@ -393,7 +477,8 @@ final class EdgePanelController {
             if panel.ignoresMouseEvents == overCard { panel.ignoresMouseEvents = !overCard }
         } else {
             let tab = cardRect(expanded: false)
-            let edgeStrip = NSRect(x: tab.maxX - 3, y: tab.minY - 24, width: 3, height: tab.height + 48)
+            let edgeX = state.placement.side == .right ? tab.maxX - 3 : tab.minX
+            let edgeStrip = NSRect(x: edgeX, y: tab.minY - 24, width: 3, height: tab.height + 48)
             inside = tab.contains(mouse) || edgeStrip.contains(mouse)
         }
 
@@ -469,7 +554,8 @@ final class EdgePanelController {
 
         // Only accept clicks on the open card; the collapsed tab and hidden state must not
         // block clicks on whatever is underneath.
-        panel.ignoresMouseEvents = target != .expanded || !cardRect(expanded: true).contains(NSEvent.mouseLocation)
+        panel.ignoresMouseEvents = state.dragCenter == nil
+            && (target != .expanded || !cardRect(expanded: true).contains(NSEvent.mouseLocation))
 
         if target == .hidden {
             leftAt = nil
@@ -483,5 +569,13 @@ final class EdgePanelController {
         } else if target == .expanded {
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
         }
+    }
+}
+
+private extension NSScreen {
+    var displayUUID: String? {
+        guard let id = deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID,
+              let uuid = CGDisplayCreateUUIDFromDisplayID(id)?.takeRetainedValue() else { return nil }
+        return CFUUIDCreateString(nil, uuid) as String
     }
 }
