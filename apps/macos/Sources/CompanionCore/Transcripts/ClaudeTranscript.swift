@@ -21,7 +21,10 @@ public enum ClaudeTranscript {
         guard entry["isMeta"] as? Bool != true, let message = entry["message"] as? [String: Any] else { return [] }
         let origin = (entry["origin"] as? [String: Any])?["kind"] as? String
         let fromUser = origin == nil || origin == "human"
-        if let text = message["content"] as? String { return notificationEvents(text) + promptEvents(text, fromUser: fromUser) }
+        if let text = message["content"] as? String {
+            let startsTurn = entry["queueTranscriptOnly"] as? Bool != true
+            return notificationEvents(text) + (startsTurn ? promptEvents(text, fromUser: fromUser) : [])
+        }
         guard let blocks = message["content"] as? [[String: Any]] else { return [] }
         var events: [TranscriptEvent] = []
         for block in blocks {
