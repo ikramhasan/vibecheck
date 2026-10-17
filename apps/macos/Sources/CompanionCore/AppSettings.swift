@@ -200,6 +200,10 @@ public final class AppSettings {
         didSet { if hasCompletedOnboarding != oldValue { defaults.set(hasCompletedOnboarding, forKey: Keys.onboarded) } }
     }
 
+    public var panelPlacement: PanelPlacement {
+        didSet { if panelPlacement != oldValue { save(panelPlacement, key: Keys.panelPlacement) } }
+    }
+
     @ObservationIgnored private let defaults: UserDefaults
 
     private enum Keys {
@@ -210,6 +214,7 @@ public final class AppSettings {
         static let sounds = "settings.sounds"
         static let remoteHosts = "settings.remoteHosts"
         static let onboarded = "settings.onboarded"
+        static let panelPlacement = "settings.panelPlacement"
         static let stored = [loader, orbFamily, agents, finishedSessionRemoval, sounds, remoteHosts]
     }
 
@@ -222,6 +227,7 @@ public final class AppSettings {
             .flatMap(FinishedSessionRemoval.init(rawValue:)) ?? .default
         sounds = Self.load(SoundSettings.self, key: Keys.sounds, from: defaults) ?? .default
         remoteHosts = Self.load([RemoteHost].self, key: Keys.remoteHosts, from: defaults) ?? []
+        panelPlacement = Self.load(PanelPlacement.self, key: Keys.panelPlacement, from: defaults) ?? PanelPlacement()
         hasCompletedOnboarding = defaults.object(forKey: Keys.onboarded) as? Bool
             ?? Keys.stored.contains { defaults.object(forKey: $0) != nil }
         defaults.set(hasCompletedOnboarding, forKey: Keys.onboarded)
