@@ -154,10 +154,13 @@ public enum ProjectIconLocator {
         static func < (a: Kind, b: Kind) -> Bool { a.rawValue < b.rawValue }
     }
 
-    public static func iconURLs(forProjectAt root: String, fileManager: FileManager = .default) -> [URL] {
+    public static func iconURLs(forProjectAt root: String, fileManager: FileManager = .default,
+                                home: String = NSHomeDirectory()) -> [URL] {
         let base = URL(fileURLWithPath: root, isDirectory: true)
         let skipped = skippedDirectories.union(gitIgnoredNames(in: base))
-        let depthLimit = fileManager.fileExists(atPath: base.appending(path: ".git").path) ? maxDepth : 0
+        let isHome = base.standardizedFileURL.path == URL(fileURLWithPath: home).standardizedFileURL.path
+        let isCheckout = fileManager.fileExists(atPath: base.appending(path: ".git").path)
+        let depthLimit = isCheckout && !isHome ? maxDepth : 0
         var found: [(kind: Kind, depth: Int, bytes: Int, url: URL)] = []
         var queue: [(dir: URL, depth: Int)] = [(base, 0)]
         var next = 0

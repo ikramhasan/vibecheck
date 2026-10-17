@@ -157,6 +157,13 @@ private func session(_ id: String, _ cwd: String, _ status: AgentSession.Status)
         #expect(ProjectIconLocator.iconURLs(forProjectAt: root.path).map(\.lastPathComponent) == ["favicon.ico"])
     }
 
+    @Test func homeDotfilesRepoOnlyChecksTheFolderItself() throws {
+        let home = try tempDir()
+        try touch(home.appending(path: ".git/HEAD"))
+        try touch(home.appending(path: "Applications/Some.app/Contents/Resources/AppIcon.icns"))
+        #expect(ProjectIconLocator.iconURLs(forProjectAt: home.path, home: home.path).isEmpty)
+    }
+
     @Test func noIcon() throws {
         let root = try tempDir()
         try touch(root.appending(path: "README.md"))
