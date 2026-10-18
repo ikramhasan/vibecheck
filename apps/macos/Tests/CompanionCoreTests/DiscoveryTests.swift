@@ -18,7 +18,7 @@ private func temporaryDirectory() throws -> URL {
         try Data().write(to: project.appendingPathComponent("abc.jsonl"))
         try #"{"pid":10,"sessionId":"abc","cwd":"/Users/me/My App/.worktrees","name":"Fix bug","status":"busy","startedAt":1791734239811}"#
             .write(to: registry.appendingPathComponent("10.json"), atomically: true, encoding: .utf8)
-        try #"{"pid":11,"sessionId":"new","cwd":"/tmp","status":"idle"}"#
+        try #"{"pid":11,"sessionId":"new","cwd":"/tmp","status":"idle","statusUpdatedAt":1792273510804}"#
             .write(to: registry.appendingPathComponent("11.json"), atomically: true, encoding: .utf8)
         try #"{"pid":12,"sessionId":"dead","cwd":"/tmp"}"#
             .write(to: registry.appendingPathComponent("12.json"), atomically: true, encoding: .utf8)
@@ -34,6 +34,8 @@ private func temporaryDirectory() throws -> URL {
         #expect(found[0].origin == .init(termProgram: "iTerm.app"))
         #expect(found[1].transcript == nil)
         #expect(found[1].statusWithoutTranscript == .idle)
+        #expect(found[0].idleSince == nil)
+        #expect(found[1].idleSince == Date(timeIntervalSince1970: 1_792_273_510.804))
     }
 }
 

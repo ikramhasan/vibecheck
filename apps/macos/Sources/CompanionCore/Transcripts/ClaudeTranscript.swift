@@ -5,8 +5,8 @@ public enum ClaudeTranscript {
     public static func events(from line: Data) -> [TranscriptEvent] {
         guard let entry = TranscriptText.json(line), entry["isSidechain"] as? Bool != true else { return [] }
         switch entry["type"] as? String {
-        case "user": return userEvents(entry)
-        case "assistant": return assistantEvents(entry)
+        case "user": return timestamped(userEvents(entry), entry)
+        case "assistant": return timestamped(assistantEvents(entry), entry)
         case "system": return entry["subtype"] as? String == "compact_boundary" ? [.compacted] : []
         case "custom-title": return TranscriptText.string(entry["customTitle"]).map { [.title($0, generated: false)] } ?? []
         case "ai-title": return TranscriptText.string(entry["aiTitle"]).map { [.title($0, generated: true)] } ?? []
@@ -14,6 +14,12 @@ public enum ClaudeTranscript {
         case "queue-operation": return entry["operation"] as? String == "enqueue" ? notificationEvents(entry["content"] as? String ?? "") : []
         default: return []
         }
+    }
+
+    private static func timestamped(_ events: [TranscriptEvent], _ entry: [String: Any]) -> [TranscriptEvent] {
+        guard !events.isEmpty, let raw = entry["timestamp"] as? String,
+              let date = try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(raw) else { return events }
+        return events + [.timestamp(date)]
     }
 
     private static func userEvents(_ entry: [String: Any]) -> [TranscriptEvent] {

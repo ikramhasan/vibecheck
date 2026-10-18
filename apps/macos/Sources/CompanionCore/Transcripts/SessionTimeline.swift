@@ -15,6 +15,7 @@ public struct SessionTimeline: Equatable, Sendable {
     private var pending: [ToolCall] = []
     private var background: [BackgroundTask] = []
     private var awaitingBackground = false
+    private var lastEventAt: Date?
 
     static let claudeWindow = 1_000_000
     static let legacyClaudeWindow = 200_000
@@ -82,6 +83,8 @@ public struct SessionTimeline: Equatable, Sendable {
             guard generated == false || titleIsGenerated else { return }
             title = TranscriptText.oneLine(text)
             titleIsGenerated = generated
+        case .timestamp(let date):
+            lastEventAt = date
         case .contextUsage(let used, let window):
             let window = window ?? Self.claudeWindow(model: model, usedTokens: used)
             context = .init(usedTokens: used, windowTokens: window)
@@ -164,11 +167,17 @@ public struct SessionTimeline: Equatable, Sendable {
 
 extension SessionTimeline {
     func session(for live: LiveSession, updatedAt: Date) -> AgentSession {
-        AgentSession(agent: live.agent, sessionID: live.sessionID, cwd: live.cwd,
-                     name: live.name ?? title, model: model, pid: live.pid, origin: live.origin,
-                     status: hasEvents ? status : live.statusWithoutTranscript,
-                     task: task, lastReply: lastReply, activity: activity, attention: attention,
-                     context: context, wasInterrupted: wasInterrupted,
-                     startedAt: live.startedAt, updatedAt: updatedAt)
+        let endedWithoutReply = endedWithoutReply(idleSince: live.idleSince)
+        return AgentSession(agent: live.agent, sessionID: live.sessionID, cwd: live.cwd,
+                            name: live.name ?? title, model: model, pid: live.pid, origin: live.origin,
+                            status: !hasEvents ? live.statusWithoutTranscript : endedWithoutReply ? .idle : status,
+                            task: task, lastReply: lastReply, activity: endedWithoutReply ? nil : activity, attention: attention,
+                            context: context, wasInterrupted: wasInterrupted,
+                            startedAt: live.startedAt, updatedAt: updatedAt)
+    }
+
+    private func endedWithoutReply(idleSince: Date?) -> Bool {
+        guard status == .working, !awaitingBackground, let idleSince, let lastEventAt else { return false }
+        return idleSince >= lastEventAt
     }
 }

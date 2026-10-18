@@ -8,15 +8,21 @@ public enum ClaudeDiscovery {
         var name: String?
         var status: String?
         var startedAt: Double?
+        var statusUpdatedAt: Double?
 
         var startedDate: Date? { startedAt.map { Date(timeIntervalSince1970: $0 / 1000) } }
+
+        var idleSince: Date? {
+            guard status == "idle" else { return nil }
+            return statusUpdatedAt.map { Date(timeIntervalSince1970: $0 / 1000) }
+        }
 
         var transcriptPath: String { "\(ClaudeDiscovery.projectDirectoryName(cwd))/\(sessionId).jsonl" }
 
         func liveSession(transcript: URL?, origin: AgentSession.Origin?) -> LiveSession {
             LiveSession(agent: AgentIdentity.claude, sessionID: sessionId, format: .claude, transcript: transcript,
                         pid: pid, cwd: cwd, name: name, origin: origin, startedAt: startedDate,
-                        statusWithoutTranscript: status == "busy" ? .working : .idle)
+                        statusWithoutTranscript: status == "busy" ? .working : .idle, idleSince: idleSince)
         }
     }
 
