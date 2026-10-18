@@ -18,6 +18,7 @@ public enum TranscriptEvent: Equatable, Sendable {
     case model(String)
     case title(String, generated: Bool)
     case contextUsage(usedTokens: Int, windowTokens: Int?)
+    case timestamp(Date)
 }
 
 public struct ToolCall: Equatable, Sendable {

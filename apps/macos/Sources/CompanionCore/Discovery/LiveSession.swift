@@ -23,10 +23,11 @@ public struct LiveSession: Equatable, Sendable {
     public var origin: AgentSession.Origin?
     public var startedAt: Date?
     public var statusWithoutTranscript: AgentSession.Status
+    public var idleSince: Date?
 
     public init(agent: AgentSession.AgentInfo, sessionID: String, format: TranscriptFormat, transcript: URL?,
                 pid: Int32, cwd: String, name: String? = nil, origin: AgentSession.Origin? = nil,
-                startedAt: Date? = nil, statusWithoutTranscript: AgentSession.Status = .idle) {
+                startedAt: Date? = nil, statusWithoutTranscript: AgentSession.Status = .idle, idleSince: Date? = nil) {
         self.agent = agent
         self.sessionID = sessionID
         self.format = format
@@ -37,6 +38,7 @@ public struct LiveSession: Equatable, Sendable {
         self.origin = origin
         self.startedAt = startedAt
         self.statusWithoutTranscript = statusWithoutTranscript
+        self.idleSince = idleSince
     }
 
     public var id: String { "\(agent.id)/\(sessionID)" }

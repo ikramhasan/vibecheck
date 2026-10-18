@@ -324,3 +324,31 @@ private func timeline(_ path: String, _ format: TranscriptFormat) throws -> Sess
         #expect(t.lastReply == "Thanks, cycle 19 is in main.")
     }
 }
+
+@Suite struct ClaudeTurnEndedWithoutReplyTests {
+    private func session(idleSince: String?) throws -> AgentSession {
+        let t = try timeline("claude/turn-ended-on-tool-result.jsonl", .claude)
+        let idle = try idleSince.map { try Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse($0) }
+        let live = LiveSession(agent: AgentIdentity.claude, sessionID: "s", format: .claude, transcript: nil,
+                               pid: 1, cwd: "/tmp", idleSince: idle)
+        return t.session(for: live, updatedAt: .now)
+    }
+
+    @Test func registryIdleAfterTheLastLineEndsTheTurn() throws {
+        let s = try session(idleSince: "2026-10-17T21:45:10.804Z")
+        #expect(s.status == .idle)
+        #expect(s.activity == nil)
+        #expect(s.lastReply == "The glow fades out cleanly now. Wrapping up.")
+    }
+
+    @Test func registryIdleFromBeforeTheLastLineIsStale() throws {
+        let s = try session(idleSince: "2026-10-17T21:45:07.000Z")
+        #expect(s.status == .working)
+        #expect(s.activity == "Thinking…")
+    }
+
+    @Test func busyRegistryKeepsTheTurnRunning() throws {
+        let s = try session(idleSince: nil)
+        #expect(s.status == .working)
+    }
+}
