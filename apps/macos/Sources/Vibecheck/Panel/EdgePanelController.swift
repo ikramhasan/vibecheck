@@ -510,12 +510,12 @@ final class EdgePanelController {
         let pendingIDs = Set(store.sessions.filter {
             $0.attentionKey.map(presentation.pendingAttention.contains) ?? false
         }.map(\.id))
-        if pendingIDs != state.pendingAttentionIDs {
-            state.pendingAttentionIDs = pendingIDs
-            contentChanged()
-        }
 
         guard target != state.mode else {
+            if pendingIDs != state.pendingAttentionIDs {
+                state.pendingAttentionIDs = pendingIDs
+                contentChanged()
+            }
             if attentionArrived { NSSound(named: "Tink")?.play() }
             return
         }
@@ -544,7 +544,11 @@ final class EdgePanelController {
         hideWork?.cancel()
         if target != .hidden, !panel.isVisible { panel.orderFrontRegardless() }
 
-        withAnimation(animation) { state.mode = target }
+        withAnimation(animation) {
+            state.mode = target
+            state.pendingAttentionIDs = pendingIDs
+        }
+        contentChanged()
         if target != .expanded && state.page != .sessions {
             state.page = .sessions
             state.serversOfSessionID = nil
