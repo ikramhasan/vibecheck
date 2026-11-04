@@ -26,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let usage = UsageStore(providers: args.contains("--demo") ? DemoUsage.providers : [ClaudeUsage(), CodexUsage(), KiroUsage()])
         let settings = AppSettings()
         let machines = RemoteMachines(store: store)
+        ProjectIcons.shared.machines = machines
         let servers = args.contains("--demo")
             ? DevServerStore(agentPIDs: { [] }, scan: { _ in DemoData.servers }, terminate: { _, _ in })
             : DevServerStore(agentPIDs: { store.agentPIDs }, remote: { machines.servers }, terminate: ServerTerminator.stop)

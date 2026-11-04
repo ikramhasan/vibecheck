@@ -380,6 +380,52 @@ private actor FakeRemoteGit: GitReading {
         #expect(groups.first?.sessions.count == 2)
     }
 
+    @Test func linkedWorktreesGroupWithTheirMainCheckout() {
+        func session(_ id: String, worktree: String) -> AgentSession {
+            var session = AgentSession(agent: AgentIdentity.claude, sessionID: id, cwd: worktree, status: .working)
+            session.host = "omaku"
+            session.remoteCheckout = worktree
+            session.remoteProject = "/home/me/Shop"
+            return session
+        }
+        let groups = SessionGroup.make([session("a", worktree: "/home/me/.t3/worktrees/Shop/one"),
+                                        session("b", worktree: "/home/me/.t3/worktrees/Shop/two")]) {
+            ProjectInfo(root: $0, name: $0)
+        }
+        #expect(groups.map(\.project) == [ProjectInfo(root: "omaku:/home/me/Shop", name: "Shop", host: "omaku")])
+        #expect(groups.first?.project.path == "/home/me/Shop")
+        #expect(groups.first?.sessions.count == 2)
+    }
+
+    @Test func linkedWorktreeResolvesToItsMainCheckout() {
+        let output = Data("/home/me/.t3/worktrees/Shop/one\n/home/me/Shop/.git\n".utf8)
+        let checkout = RemoteCheckout(revParse: output, cwd: "/home/me/.t3/worktrees/Shop/one/app")
+        #expect(checkout?.toplevel == "/home/me/.t3/worktrees/Shop/one")
+        #expect(checkout?.project == "/home/me/Shop")
+    }
+
+    @Test func mainCheckoutResolvesToItselfWithARelativeCommonDirectory() {
+        let output = Data("/home/me/Shop\n../.git\n".utf8)
+        let checkout = RemoteCheckout(revParse: output, cwd: "/home/me/Shop/app")
+        #expect(checkout?.toplevel == "/home/me/Shop")
+        #expect(checkout?.project == "/home/me/Shop")
+    }
+
+    @Test func submodulesAndBareRepositoriesKeepTheirCheckout() {
+        let submodule = Data("/home/me/Shop/vendor/lib\n/home/me/Shop/.git/modules/lib\n".utf8)
+        #expect(RemoteCheckout(revParse: submodule, cwd: "/home/me/Shop/vendor/lib")?.project == "/home/me/Shop/vendor/lib")
+        let bare = Data("/home/me/shop/main\n/home/me/shop/.bare\n".utf8)
+        #expect(RemoteCheckout(revParse: bare, cwd: "/home/me/shop/main")?.project == "/home/me/shop/main")
+    }
+
+    @Test func remoteIconsRankLikeLocalOnes() {
+        let listing = ["812 apps/admin/public/favicon.png", "4096 apps/admin/public/logo.svg",
+                       "9000 apps/mobile/assets/images/icon.png", "100 generated/web/favicon.svg",
+                       "300 apps/web/README.png", "0 apps/web/favicon.svg"].joined(separator: "\0") + "\0"
+        #expect(ProjectIconLocator.remoteIconPaths(listing: Data(listing.utf8), gitignore: "generated/\n")
+            == ["apps/admin/public/favicon.png", "apps/mobile/assets/images/icon.png", "apps/admin/public/logo.svg"])
+    }
+
     @Test func readsTheConfiguredHostname() {
         let config = "user iku\nhostname omaku.example.ts.net\nport 22\nproxyjump bastion\n"
         #expect(RemoteSessionSource.configuredHostname(fromConfig: config) == "omaku.example.ts.net")

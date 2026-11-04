@@ -115,6 +115,10 @@ enum RemoteScript {
       local git=(git -C "$dir" -c core.quotepath=off --no-pager)
       case $op in
         toplevel) set -- "${git[@]}" rev-parse --show-toplevel ;;
+        checkout) set -- "${git[@]}" rev-parse --show-toplevel --git-common-dir ;;
+        icons) local depth=1
+          [[ -e $dir/.git && $dir != "$HOME" ]] && depth=\#(ProjectIconLocator.maxDepth + 1)
+          set -- find "$dir" -mindepth 1 -maxdepth "$depth" \( -type d \( \#(ProjectIconLocator.findPrunedNames) -o -name '.*' ! -name .github \) -prune \) -o -type f -size +0 \( \#(ProjectIconLocator.findPatterns) \) -printf '%s %P\0' ;;
         branch) set -- "${git[@]}" symbolic-ref -q --short HEAD ;;
         head) set -- "${git[@]}" rev-parse -q --verify 'HEAD^{commit}' ;;
         reflog) [[ $arg =~ ^[0-9]+$ ]] || { reply "$id" 255 ""; return; }

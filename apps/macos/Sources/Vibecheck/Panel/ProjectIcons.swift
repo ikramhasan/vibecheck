@@ -12,6 +12,7 @@ final class ProjectIcons {
     private var icons: [String: NSImage] = [:]
     @ObservationIgnored private var requested: Set<String> = []
     @ObservationIgnored let resolver = ProjectResolver()
+    @ObservationIgnored var machines: RemoteMachines?
 
     func project(for cwd: String) -> ProjectInfo { resolver.project(for: cwd) }
 
@@ -19,18 +20,34 @@ final class ProjectIcons {
         SessionGroup.make(sessions, project: resolver.project(for:))
     }
 
-    /// The icon for a project root, or nil while loading / when there is none.
-    func icon(for root: String) -> NSImage? {
+    /// The icon for a project, or nil while loading / when there is none.
+    func icon(for project: ProjectInfo) -> NSImage? {
+        let root = project.root
         if !requested.contains(root) {
             requested.insert(root)
+            let remote = project.host.flatMap { machines?.source(on: $0) }
+            let path = project.path
             Task.detached(priority: .utility) {
-                let image = ProjectIconLocator.iconURLs(forProjectAt: root).lazy
-                    .compactMap(NSImage.init(contentsOf:)).first(where: \.isValid)
+                let image = if let remote {
+                    await Self.remoteIcon(at: path, on: remote)
+                } else {
+                    ProjectIconLocator.iconURLs(forProjectAt: root).lazy
+                        .compactMap(NSImage.init(contentsOf:)).first(where: \.isValid)
+                }
                 guard let image else { return }
                 await MainActor.run { ProjectIcons.shared.icons[root] = image }
             }
         }
         return icons[root]
+    }
+
+    private nonisolated static func remoteIcon(at root: String, on source: RemoteSessionSource) async -> NSImage? {
+        for path in await source.iconPaths(in: root) {
+            if let data = await source.file(path, in: root), let image = NSImage(data: data), image.isValid {
+                return image
+            }
+        }
+        return nil
     }
 }
 
@@ -43,7 +60,7 @@ struct ProjectBadge: View {
     var body: some View {
         let radius = size * 0.28
         Group {
-            if let image = icons.icon(for: project.root) {
+            if let image = icons.icon(for: project) {
                 Image(nsImage: image)
                     .resizable()
                     .interpolation(.high)

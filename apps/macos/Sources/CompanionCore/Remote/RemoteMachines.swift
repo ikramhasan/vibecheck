@@ -32,7 +32,11 @@ public final class RemoteMachines {
         sources.first { $0.host == host }
     }
 
+    public func source(on alias: String) -> RemoteSessionSource? {
+        sources.first { $0.host.alias == alias }
+    }
+
     public func git(on alias: String) -> GitReading? {
-        sources.first { $0.host.alias == alias }.map(RemoteGit.init(source:))
+        source(on: alias).map(RemoteGit.init(source:))
     }
 }

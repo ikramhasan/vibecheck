@@ -125,6 +125,8 @@ public struct AgentSession: Identifiable, Hashable, Sendable {
     public var sshPID: Int32?
     /// For a remote session, the git checkout containing `cwd` on that machine, once known.
     public var remoteCheckout: String?
+    /// For a remote session, the main checkout of `remoteCheckout`; they differ for a linked worktree.
+    public var remoteProject: String?
     public var origin: Origin?
     public var status: Status
     public var task: String?

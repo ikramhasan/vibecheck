@@ -25,7 +25,6 @@ public struct RemoteGit: GitReading {
     }
 
     public func contents(of path: String, in checkout: String) async -> Data? {
-        guard let output = await source.query("file", in: checkout, argument: path), output.status == 0 else { return nil }
-        return output.stdout
+        await source.file(path, in: checkout)
     }
 }
