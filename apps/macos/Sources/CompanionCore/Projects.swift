@@ -9,6 +9,11 @@ public struct ProjectInfo: Hashable, Sendable {
     /// The ssh host the project lives on; `nil` for this Mac.
     public var host: String?
 
+    /// The repository root on its own machine, without the host prefix of `root`.
+    public var path: String {
+        host.map { String(root.dropFirst($0.count + 1)) } ?? root
+    }
+
     public init(root: String, name: String, host: String? = nil) {
         self.root = root
         self.name = name
@@ -161,7 +166,7 @@ public enum ProjectIconLocator {
         let isHome = base.standardizedFileURL.path == URL(fileURLWithPath: home).standardizedFileURL.path
         let isCheckout = fileManager.fileExists(atPath: base.appending(path: ".git").path)
         let depthLimit = isCheckout && !isHome ? maxDepth : 0
-        var found: [(kind: Kind, depth: Int, bytes: Int, url: URL)] = []
+        var found: [(kind: Kind, depth: Int, bytes: Int, item: URL)] = []
         var queue: [(dir: URL, depth: Int)] = [(base, 0)]
         var next = 0
         while next < queue.count, next < maxDirectories {
@@ -181,22 +186,63 @@ public enum ProjectIconLocator {
                 found.append((kind, depth, bytes, child))
             }
         }
-        return found.sorted { ($0.kind, $0.depth, -$0.bytes) < ($1.kind, $1.depth, -$1.bytes) }.map(\.url)
+        return ranked(found)
     }
+
+    /// Ranks a remote listing of `<bytes> <relative path>` records, NUL-separated, the way
+    /// `iconURLs` ranks local files. The listing is already pruned like the local walk,
+    /// except for `.gitignore`d names `remoteIgnoredArgument` couldn't pass to the script.
+    public static func remoteIconPaths(listing: Data, gitignore: String) -> [String] {
+        let ignored = gitIgnoredNames(gitignore)
+        let found = String(decoding: listing, as: UTF8.self).split(separator: "\0").compactMap { record -> (kind: Kind, depth: Int, bytes: Int, item: String)? in
+            let fields = record.split(separator: " ", maxSplits: 1)
+            guard fields.count == 2, let bytes = Int(fields[0]), bytes > 0 else { return nil }
+            let path = String(fields[1])
+            let folders = path.split(separator: "/").dropLast()
+            guard !folders.contains(where: { ignored.contains(String($0)) }),
+                  let kind = kind(of: URL(fileURLWithPath: "/" + path)) else { return nil }
+            return (kind, folders.count, bytes, path)
+        }
+        return ranked(found)
+    }
+
+    /// The `.gitignore`d folder names the remote search prunes while it walks, `/`-separated.
+    /// Names the script can't pass safely to `find` are left to `remoteIconPaths` to drop.
+    public static func remoteIgnoredArgument(gitignore: String) -> String {
+        gitIgnoredNames(gitignore)
+            .filter { $0.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || "._-".contains($0)) } }
+            .sorted().joined(separator: "/")
+    }
+
+    /// A `find` expression matching every file `kind(of:)` could accept, for the remote script.
+    static var findPatterns: String {
+        let names = iconNames.keys.sorted().map { "-iname \($0)" }
+        return (names + ["-iname '*.icns'", "-path '*/AppIcon*.appiconset/*' -iname '*.png'",
+                         "-path '*/mipmap-*/*' -iname ic_launcher.png"]).joined(separator: " -o ")
+    }
+
+    static var findPrunedNames: String {
+        skippedDirectories.sorted().map { "-name \($0)" }.joined(separator: " -o ")
+    }
+
+    private static func ranked<T>(_ found: [(kind: Kind, depth: Int, bytes: Int, item: T)]) -> [T] {
+        found.sorted { ($0.kind, $0.depth, -$0.bytes) < ($1.kind, $1.depth, -$1.bytes) }.map(\.item)
+    }
+
+    static let iconNames: [String: Kind] = [
+        "favicon.svg": .vector, "icon.svg": .vector,
+        "apple-icon.png": .appIcon, "apple-touch-icon.png": .appIcon, "icon-512.png": .appIcon,
+        "icon-512x512.png": .appIcon, "android-chrome-512x512.png": .appIcon,
+        "icon.png": .raster, "favicon.png": .raster, "icon-192.png": .raster, "android-chrome-192x192.png": .raster,
+        "favicon.ico": .ico, "icon.ico": .ico,
+        "logo.svg": .logo, "logo.png": .logo,
+    ]
 
     static func kind(of url: URL) -> Kind? {
         let name = url.lastPathComponent.lowercased()
         let ext = url.pathExtension.lowercased()
         let folder = url.deletingLastPathComponent().lastPathComponent
-        switch name {
-        case "favicon.svg", "icon.svg": return .vector
-        case "apple-icon.png", "apple-touch-icon.png", "icon-512.png", "icon-512x512.png",
-             "android-chrome-512x512.png": return .appIcon
-        case "icon.png", "favicon.png", "icon-192.png", "android-chrome-192x192.png": return .raster
-        case "favicon.ico", "icon.ico": return .ico
-        case "logo.svg", "logo.png": return .logo
-        default: break
-        }
+        if let kind = iconNames[name] { return kind }
         if ext == "icns" { return .appIcon }
         if ext == "png", folder.hasPrefix("AppIcon"), folder.hasSuffix(".appiconset") { return .appIcon }
         if name == "ic_launcher.png", folder.hasPrefix("mipmap-") { return .appIcon }
@@ -205,6 +251,10 @@ public enum ProjectIconLocator {
 
     static func gitIgnoredNames(in base: URL) -> Set<String> {
         guard let text = try? String(contentsOf: base.appending(path: ".gitignore"), encoding: .utf8) else { return [] }
+        return gitIgnoredNames(text)
+    }
+
+    static func gitIgnoredNames(_ text: String) -> Set<String> {
         var names: Set<String> = []
         for line in text.split(whereSeparator: \.isNewline) {
             var entry = line.trimmingCharacters(in: .whitespaces)
@@ -240,7 +290,7 @@ public struct SessionGroup: Identifiable, Hashable, Sendable {
         var groups: [String: SessionGroup] = [:]
         for s in sessions {
             let p = s.host.map { host in
-                let root = s.remoteCheckout ?? s.cwd
+                let root = s.remoteProject ?? s.remoteCheckout ?? s.cwd
                 return ProjectInfo(root: "\(host):\(root)", name: (root as NSString).lastPathComponent, host: host)
             } ?? project(s.cwd)
             if groups[p.root] == nil { order.append(p.root); groups[p.root] = SessionGroup(project: p, sessions: []) }

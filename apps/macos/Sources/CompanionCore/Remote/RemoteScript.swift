@@ -3,6 +3,7 @@ enum RemoteScript {
     static let headLimit = 512 * 1024
     static let serverScanSeconds = 5
     static let binarySniffBytes = 8000
+    static let iconSearchSeconds = 3
 
     static let source = #"""
     export LC_ALL=C
@@ -109,12 +110,22 @@ enum RemoteScript {
       link[$pid]="ssh=$ssh"$'\n'"ports=${ports[*]}"
     }
     query() {
-      local id=$1 op=$2 dir=$3 arg=$4 output
+      local id=$1 op=$2 dir=$3 arg=$4 output limit=10
       [[ $id =~ ^[0-9]+$ ]] || return
       if [[ $dir != /* || ! -d $dir ]]; then reply "$id" 255 ""; return; fi
       local git=(git -C "$dir" -c core.quotepath=off --no-pager)
       case $op in
         toplevel) set -- "${git[@]}" rev-parse --show-toplevel ;;
+        checkout) set -- "${git[@]}" rev-parse --show-toplevel --git-common-dir ;;
+        icons) local depth=1 names=() name ignored=()
+          [[ -e $dir/.git && $dir != "$HOME" ]] && depth=\#(ProjectIconLocator.maxDepth + 1)
+          IFS=/ read -r -a names <<< "$arg"
+          for name in "${names[@]}"; do
+            [[ $name =~ ^[A-Za-z0-9._-]+$ ]] || { reply "$id" 255 ""; return; }
+            ignored+=(-o -name "$name")
+          done
+          limit=\#(iconSearchSeconds)
+          set -- find "$dir" -mindepth 1 -maxdepth "$depth" \( -type d \( \#(ProjectIconLocator.findPrunedNames) "${ignored[@]}" -o -name '.*' ! -name .github \) -prune \) -o -type f -size +0 \( \#(ProjectIconLocator.findPatterns) \) -printf '%s %P\0' ;;
         branch) set -- "${git[@]}" symbolic-ref -q --short HEAD ;;
         head) set -- "${git[@]}" rev-parse -q --verify 'HEAD^{commit}' ;;
         reflog) [[ $arg =~ ^[0-9]+$ ]] || { reply "$id" 255 ""; return; }
@@ -143,7 +154,7 @@ enum RemoteScript {
           fi ;;
         *) reply "$id" 255 ""; return ;;
       esac
-      output=$(set -o pipefail; GIT_OPTIONAL_LOCKS=0 GIT_TERMINAL_PROMPT=0 timeout 10 "$@" 2>/dev/null | base64 -w0)
+      output=$(set -o pipefail; GIT_OPTIONAL_LOCKS=0 GIT_TERMINAL_PROMPT=0 timeout "$limit" "$@" 2>/dev/null | base64 -w0)
       reply "$id" "$?" "$output"
     }
 

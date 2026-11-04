@@ -51,7 +51,7 @@ public final class RemoteSessionSource: SessionSource {
     @ObservationIgnored private var queries: [Int: CheckedContinuation<GitOutput?, Never>] = [:]
     @ObservationIgnored private var hostAddress: String?
     @ObservationIgnored private var configuredHostname: String?
-    @ObservationIgnored private var checkouts: [String: String] = [:]
+    @ObservationIgnored private var checkouts: [String: RemoteCheckout] = [:]
     @ObservationIgnored private var notCheckouts: [String: Date] = [:]
     @ObservationIgnored private var resolvingCheckouts: Set<String> = []
     @ObservationIgnored private var unsupported = false
@@ -100,6 +100,20 @@ public final class RemoteSessionSource: SessionSource {
             queries[id] = continuation
             send("Q\t\(id)\t\(op)\t\(directory)\t\(argument)\n")
         }
+    }
+
+    /// A file inside `directory` on this machine; `nil` if it's missing, a symlink or too large.
+    public func file(_ path: String, in directory: String) async -> Data? {
+        guard let output = await query("file", in: directory, argument: path), output.status == 0 else { return nil }
+        return output.stdout
+    }
+
+    /// Files that could be the icon of the project at `root` on this machine, best first.
+    public func iconPaths(in root: String) async -> [String] {
+        let gitignore = await file(".gitignore", in: root).map { String(decoding: $0, as: UTF8.self) } ?? ""
+        let ignored = ProjectIconLocator.remoteIgnoredArgument(gitignore: gitignore)
+        guard let listing = await query("icons", in: root, argument: ignored) else { return [] }
+        return ProjectIconLocator.remoteIconPaths(listing: listing.stdout, gitignore: gitignore)
     }
 
     private func failQueries() {
@@ -252,7 +266,8 @@ public final class RemoteSessionSource: SessionSource {
         for index in next.indices {
             let cwd = next[index].cwd
             if let checkout = checkouts[cwd] {
-                next[index].remoteCheckout = checkout
+                next[index].remoteCheckout = checkout.toplevel
+                next[index].remoteProject = checkout.project
             } else if notCheckouts[cwd].map({ -$0.timeIntervalSinceNow >= Self.checkoutRetryDelay }) ?? true {
                 resolveCheckout(of: cwd)
             }
@@ -265,11 +280,10 @@ public final class RemoteSessionSource: SessionSource {
     private func resolveCheckout(of cwd: String) {
         guard resolvingCheckouts.insert(cwd).inserted else { return }
         Task {
-            let output = await query("toplevel", in: cwd)
+            let output = await query("checkout", in: cwd)
             resolvingCheckouts.remove(cwd)
             guard let output else { return }
-            let checkout = String(decoding: output.stdout, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-            if output.status == 0, !checkout.isEmpty {
+            if output.status == 0, let checkout = RemoteCheckout(revParse: output.stdout, cwd: cwd) {
                 checkouts[cwd] = checkout
                 notCheckouts[cwd] = nil
                 publish()
@@ -286,5 +300,23 @@ public final class RemoteSessionSource: SessionSource {
                            connections: ProcessScanner.tcpConnections(pid: $0.pid))
         }
         return { RemoteJump.sshPID(for: $0, hostAddress: hostAddress, clients: clients) }
+    }
+}
+
+/// The git checkout a remote directory is in, and the main checkout it belongs to.
+struct RemoteCheckout: Equatable {
+    var toplevel: String
+    var project: String
+
+    /// Reads `git rev-parse --show-toplevel --git-common-dir`. Older git prints the common
+    /// directory relative to `cwd`. Only a `.git` folder names a main checkout; submodules and
+    /// bare repositories keep the worktree, like `ProjectResolver` does locally.
+    init?(revParse output: Data, cwd: String) {
+        let lines = String(decoding: output, as: UTF8.self).split(separator: "\n").map(String.init)
+        guard lines.count == 2, !lines[0].isEmpty else { return nil }
+        let common = URL(fileURLWithPath: lines[1], relativeTo: URL(fileURLWithPath: cwd, isDirectory: true))
+            .absoluteURL.standardized
+        toplevel = lines[0]
+        project = common.lastPathComponent == ".git" ? common.deletingLastPathComponent().path : lines[0]
     }
 }
