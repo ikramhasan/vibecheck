@@ -426,6 +426,11 @@ private actor FakeRemoteGit: GitReading {
             == ["apps/admin/public/favicon.png", "apps/mobile/assets/images/icon.png", "apps/admin/public/logo.svg"])
     }
 
+    @Test func remoteIconSearchPrunesSafeGitIgnoredNames() {
+        let gitignore = "venv/\n/data\n__pycache__\n*.log\nmy models\nbuild/out\n"
+        #expect(ProjectIconLocator.remoteIgnoredArgument(gitignore: gitignore) == "__pycache__/data/venv")
+    }
+
     @Test func readsTheConfiguredHostname() {
         let config = "user iku\nhostname omaku.example.ts.net\nport 22\nproxyjump bastion\n"
         #expect(RemoteSessionSource.configuredHostname(fromConfig: config) == "omaku.example.ts.net")

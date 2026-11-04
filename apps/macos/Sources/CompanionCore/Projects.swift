@@ -191,7 +191,7 @@ public enum ProjectIconLocator {
 
     /// Ranks a remote listing of `<bytes> <relative path>` records, NUL-separated, the way
     /// `iconURLs` ranks local files. The listing is already pruned like the local walk,
-    /// except for the folders named in the root `.gitignore`.
+    /// except for `.gitignore`d names `remoteIgnoredArgument` couldn't pass to the script.
     public static func remoteIconPaths(listing: Data, gitignore: String) -> [String] {
         let ignored = gitIgnoredNames(gitignore)
         let found = String(decoding: listing, as: UTF8.self).split(separator: "\0").compactMap { record -> (kind: Kind, depth: Int, bytes: Int, item: String)? in
@@ -204,6 +204,14 @@ public enum ProjectIconLocator {
             return (kind, folders.count, bytes, path)
         }
         return ranked(found)
+    }
+
+    /// The `.gitignore`d folder names the remote search prunes while it walks, `/`-separated.
+    /// Names the script can't pass safely to `find` are left to `remoteIconPaths` to drop.
+    public static func remoteIgnoredArgument(gitignore: String) -> String {
+        gitIgnoredNames(gitignore)
+            .filter { $0.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || "._-".contains($0)) } }
+            .sorted().joined(separator: "/")
     }
 
     /// A `find` expression matching every file `kind(of:)` could accept, for the remote script.

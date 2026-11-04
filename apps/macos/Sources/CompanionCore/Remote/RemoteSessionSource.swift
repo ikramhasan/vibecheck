@@ -110,8 +110,9 @@ public final class RemoteSessionSource: SessionSource {
 
     /// Files that could be the icon of the project at `root` on this machine, best first.
     public func iconPaths(in root: String) async -> [String] {
-        guard let listing = await query("icons", in: root) else { return [] }
         let gitignore = await file(".gitignore", in: root).map { String(decoding: $0, as: UTF8.self) } ?? ""
+        let ignored = ProjectIconLocator.remoteIgnoredArgument(gitignore: gitignore)
+        guard let listing = await query("icons", in: root, argument: ignored) else { return [] }
         return ProjectIconLocator.remoteIconPaths(listing: listing.stdout, gitignore: gitignore)
     }
 
